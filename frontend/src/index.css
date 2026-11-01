@@ -1,0 +1,419 @@
+/*
+ * Dark theme. The palette follows kiro-dashboard-public (antd dark theme with
+ * a navy background): page #0b1220, cards #111a2e, header #0f1830, table
+ * header #16223c, borders #1e2a44, primary #3b82f6. Components use the
+ * variables below, so the theme lives in this one block. The UI is always
+ * dark; it does not follow the OS color scheme.
+ */
+:root {
+  color-scheme: dark;
+
+  --color-fg-default: #e2e8f0;
+  --color-fg-muted: #94a3b8;
+  --color-fg-subtle: #64748b;
+  --color-bg-default: #0b1220; /* page */
+  --color-bg-card: #111a2e; /* cards, panels */
+  --color-bg-header: #0f1830; /* top bar */
+  --color-bg-subtle: #16223c; /* table header, hover, raised */
+  --color-bg-inset: #0b1220; /* inputs */
+  --color-border-default: #2a3a5c;
+  --color-border-muted: #1e2a44;
+  --color-accent-fg: #60a5fa;
+  --color-accent-emphasis: #3b82f6;
+  --color-accent-soft: rgba(59, 130, 246, 0.16);
+  --color-btn-bg: #16223c;
+  --color-btn-border: #2a3a5c;
+  --color-btn-hover-bg: #1e2d4d;
+  --color-btn-primary-bg: #3b82f6;
+  --color-btn-primary-hover-bg: #2563eb;
+  --color-danger-fg: #f87171;
+  --color-danger-bg: rgba(239, 68, 68, 0.1);
+  --color-success-fg: #22c55e;
+  --color-warning-fg: #f59e0b;
+  --color-highlight-bg: rgba(245, 158, 11, 0.18);
+  --color-highlight-fg: #fbbf24;
+  --radius: 8px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-fg-default);
+  background: var(--color-bg-default);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--color-bg-default);
+}
+
+/* Layout: top bar + content card (as in the reference dashboard) */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 56px;
+  padding: 0 20px;
+  background: var(--color-bg-header);
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.app-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+  white-space: nowrap;
+}
+
+.app-nav {
+  list-style: none;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.app-nav button {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.app-nav button:hover {
+  background: var(--color-bg-subtle);
+}
+
+.app-nav button.active {
+  color: var(--color-accent-fg);
+  font-weight: 600;
+}
+
+.lang-switch {
+  margin-left: auto;
+  padding: 3px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.lang-switch:hover {
+  background: var(--color-bg-subtle);
+}
+
+.lang-switch option {
+  background: var(--color-bg-card);
+  color: var(--color-fg-default);
+}
+
+.app-content {
+  flex: 1;
+  padding: 20px;
+  min-width: 0;
+}
+
+.app-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius);
+  padding: 4px 24px 24px;
+}
+
+/* 文档处理 page: card is 60% of the page width, centered (never narrower than
+   760px so the form and review table stay usable; full width on small screens). */
+.app-card-narrow {
+  width: 60%;
+  min-width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+/* Typography */
+h1, h2, h3, h4 {
+  color: var(--color-fg-default);
+  font-weight: 600;
+  margin-top: 0;
+}
+
+h1 { font-size: 24px; margin-bottom: 8px; }
+h2 {
+  font-size: 18px;
+  margin: 0 0 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+h3 { font-size: 16px; margin-bottom: 8px; }
+h4 { font-size: 14px; margin-bottom: 4px; }
+
+p {
+  margin: 0 0 16px;
+  color: var(--color-fg-muted);
+}
+
+code {
+  font-family: var(--font-mono);
+  color: var(--color-fg-default);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--color-border-muted);
+  margin: 16px 0;
+}
+
+/* Form elements */
+select, input[type="text"], input[type="file"] {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-btn-border);
+  border-radius: 6px;
+  background: var(--color-bg-inset);
+  color: var(--color-fg-default);
+  line-height: 20px;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 3px 12px;
+  border: 1px solid var(--color-btn-border);
+  border-radius: 6px;
+  background: var(--color-btn-bg);
+  color: var(--color-fg-default);
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--color-btn-hover-bg);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--color-accent-emphasis);
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+select:focus, input:focus, button:focus-visible {
+  outline: none;
+  border-color: var(--color-accent-emphasis);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+button {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 5px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--color-btn-border);
+  background: var(--color-btn-bg);
+  color: var(--color-fg-default);
+  cursor: pointer;
+  line-height: 20px;
+  transition: background 0.1s;
+}
+
+button:hover {
+  background: var(--color-btn-hover-bg);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.btn-primary {
+  background: var(--color-btn-primary-bg);
+  color: #ffffff;
+  border-color: var(--color-btn-primary-bg);
+}
+
+button.btn-primary:hover:not(:disabled) {
+  background: var(--color-btn-primary-hover-bg);
+}
+
+button.btn-danger {
+  color: var(--color-danger-fg);
+  border-color: var(--color-danger-fg);
+  background: transparent;
+}
+
+button.btn-danger:hover {
+  background: var(--color-danger-bg);
+}
+
+/* Alerts */
+[role="alert"] {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--color-danger-fg);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+/* Tables (rule list, detection review) */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.data-table th {
+  padding: 10px 12px;
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-muted);
+  font-weight: 600;
+  font-size: 13px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-muted);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 10px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+  background: rgba(22, 34, 60, 0.6);
+}
+
+/* Detection review */
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.review-actions .review-debug {
+  margin: 0 0 0 12px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-table .col-check { width: 44px; text-align: center; }
+.review-table .col-value { width: 24%; }
+.review-table .col-type { width: 18%; }
+.review-table .col-count { width: 140px; white-space: nowrap; }
+
+.review-table tbody tr {
+  cursor: pointer;
+}
+
+.review-table tbody tr.is-unchecked td {
+  opacity: 0.45;
+}
+
+.review-table td.col-check {
+  vertical-align: middle;
+}
+
+.detection-value {
+  font-weight: 600;
+  color: var(--color-fg-default);
+  word-break: break-all;
+}
+
+.detection-type {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-fg-muted);
+  word-break: break-word;
+}
+
+.detection-context {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-fg-muted);
+  word-break: break-all;
+  /* The snippet can contain newlines from the source document; collapse them
+     so the context only wraps when it does not fit. */
+  white-space: normal;
+}
+
+.detection-context mark {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--color-highlight-bg);
+  color: var(--color-highlight-fg);
+}
+
+.detection-count {
+  color: var(--color-fg-default);
+  font-variant-numeric: tabular-nums;
+}
+
+.detection-pages {
+  display: block;
+  font-size: 12px;
+  color: var(--color-fg-subtle);
+}
+
+.review-footer {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+}
+
+/* Keep form labels on one line (English labels are longer than the Chinese ones) */
+form label {
+  white-space: nowrap;
+}
+
+/* Status text colours (inline styles use these variables) */
+.status-warning { color: var(--color-warning-fg); }
+.status-success { color: var(--color-success-fg); }
+.status-danger { color: var(--color-danger-fg); }

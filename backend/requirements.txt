@@ -1,0 +1,67 @@
+# aws-cdk-lib: the stack (infra/redaction_stack.py) uses the AgentCore L2
+# constructs from `aws_cdk.aws_bedrockagentcore` (Runtime, AgentRuntimeArtifact,
+# AgentCoreRuntime.PYTHON_3_12). Those did NOT exist in the prior 2.150.0 pin
+# (which predated the AgentCore work and was never updated to match the code),
+# so a clean install could not even synth/deploy. Bumped to 2.263.0, which
+# provides those APIs; `cdk synth`/`deploy` verified against CDK CLI 2.1135.0
+# and deployed to us-west-2 as a clean UPDATE.
+aws-cdk-lib==2.263.0
+constructs>=10.0.0,<11.0.0
+# PyMuPDF (import name `fitz`): pinned to the version the PDF extraction /
+# redaction / OCR code was actually developed and verified against. The
+# rawdict char-level alignment in agent/tools/extraction_pdf.py and the
+# add_redact_annot/apply_redactions behaviour in agent/tools/redaction_pdf.py
+# depend on this version's output, and tests/test_extraction_pdf.py +
+# tests/test_redaction_pdf.py pass against it locally. Previously declared
+# 1.24.10, which was never the installed/tested version.
+PyMuPDF==1.28.0
+python-docx==1.1.2
+# Pillow (import name `PIL`): used by agent/tools/redaction_image.py for
+# in-image redaction -- decode an embedded image, draw filled black rectangles
+# over detected PII, and re-encode it in the same format. Pinned to 11.0.0,
+# which publishes cp312 aarch64 manylinux wheels (`manylinux_2_28_aarch64` and
+# `manylinux2014_aarch64`), matching the Linux ARM64 / CPython 3.12 platforms
+# that scripts/build_agent_bundle.py cross-downloads for the AgentCore runtime
+# (the same pattern used for PyMuPDF). Wheel availability was verified against
+# PyPI with `pip download --only-binary=:all: --python-version 312
+# --implementation cp --platform manylinux_2_28_aarch64` before pinning, and
+# 11.0.0 is import-verified in backend/.venv (`import PIL` succeeds).
+Pillow==11.0.0
+
+# AgentCore Redaction Agent runtime dependencies (task 18.2).
+# - bedrock-agentcore: Amazon Bedrock AgentCore Runtime SDK, imported as
+#   `bedrock_agentcore`; provides `BedrockAgentCoreApp`, which wires the
+#   Runtime entrypoint that AgentCore invokes.
+# - strands-agents: Strands Agents SDK, imported as `strands`. It now has an
+#   in-repo caller: `agent/redaction_agent.py` assembles the redaction agent's
+#   full tool set with `strands.Agent` + `strands.tool`, wrapping each plain
+#   pipeline tool via `tool(fn)` at assembly time and registering them on an
+#   `Agent(tools=[...])`. The tool modules stay strands-free; the SDK coupling
+#   lives only in `redaction_agent.py`. The deterministic fixed-order pipeline
+#   (`agent/orchestration.py handle_job`) still drives execution -- the
+#   Agent's reasoning loop is intentionally not run -- so the pin stays
+#   deliberate and forward-looking for future model-driven agent work. Do not
+#   drop it as an unused dependency.
+# Neither SDK is needed to run the backend unit tests. `agent/runtime.py`
+# imports neither SDK at all -- it stays SDK-independent. The SDK imports live
+# only on the tracked entrypoint `agent/main.py`: it imports `bedrock_agentcore`
+# at module level (for `BedrockAgentCoreApp`) and pulls `strands` lazily inside
+# `invoke` (via `agent/redaction_agent.py`), so no unit-tested path loads either
+# SDK. Both are now installed in backend/.venv so the pins are import-verified
+# rather than merely wheel-verified.
+#
+# Both are pinned so the Runtime image is reproducible; the pins are the
+# latest versions published on PyPI at the time of pinning. Verified in
+# backend/.venv (CPython 3.13, Windows) at these exact pins: `import strands`
+# and `import bedrock_agentcore` both succeed, and each API below resolves --
+# `Agent(tools=[...])` was constructed from a `@tool`-decorated function, and
+# `BedrockAgentCoreApp()` was instantiated with `app.entrypoint` applied as a
+# decorator and `app.run` present as a callable. The full 258-test backend
+# suite passes unchanged with both installed. Runtime uses only these APIs,
+# which must be re-checked if either pin is bumped:
+#   strands: `from strands import Agent, tool`, `tool(fn)` wrapping of plain
+#       functions, `Agent(tools=[...])`, `agent.tool_names`
+#   bedrock_agentcore: `from bedrock_agentcore.runtime import
+#       BedrockAgentCoreApp`, `app.entrypoint`, `app.run()`
+strands-agents==1.50.2
+bedrock-agentcore==1.20.0

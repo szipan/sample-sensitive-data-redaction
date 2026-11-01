@@ -1,0 +1,674 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add `RecognizedElement` and `ImageRegion.recognizedElements`": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526483082
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526562792
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526819371
+      }
+    ],
+    "2.1 Populate `imageBytes` in the `.pdf` extractor": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526488211
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526844472
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527343351
+      }
+    ],
+    "2.3 Emit `ImageRegion`s from the `.docx` extractor": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526491851
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526845966
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527344951
+      }
+    ],
+    "3.1 Rewrite the prompt and add the defensive localization-response parser": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526496097
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526837871
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527346739
+      }
+    ],
+    "3.3 Add the coordinate normalizer and lazy pixel-dimension helper": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526499608
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526839581
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527348203
+      }
+    ],
+    "3.6 Assemble recognized text from elements and attach the per-region outcome": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526503310
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526841278
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527349999
+      }
+    ],
+    "3.7 Extend the audit record with rectangle count / fallback flag": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526507079
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526842959
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527351645
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526510543
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541700682
+      }
+    ],
+    "5.1 Implement `redaction_image.py` decode/decision/draw/encode core": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526514322
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541924554
+      }
+    ],
+    "5.2 Implement the pure offset→box mapping and padding helpers": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526518469
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541926245
+      }
+    ],
+    "6.1 Add the `image:` handler and `image_regions` parameter to `redaction_pdf.py`": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526522352
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542524258
+      }
+    ],
+    "7.1 Add the `image:` handler and `image_regions` parameter to `redaction_docx.py`": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526526582
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542525800
+      }
+    ],
+    "8.1 Pass `content.imageRegions` into the redactor": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526530040
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542596068
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542841472
+      }
+    ],
+    "9. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526533268
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544085414
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786545786038
+      }
+    ],
+    "10.1 Point `IMAGE_OCR_MODEL_ID` / `IMAGE_OCR_FOUNDATION_MODEL` at Sonnet": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526536992
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526564405
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526820946
+      }
+    ],
+    "11.1 Add Pillow as a real backend dependency": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526541095
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526565975
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526822710
+      }
+    ],
+    "11.2 Extend the bundle builder's key-package check": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526545058
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526567776
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526824370
+      }
+    ],
+    "11.3 Rebuild the agent bundle so the aarch64 Pillow wheel is vendored": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526547988
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786545787656
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786545961906
+      }
+    ],
+    "13. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526551770
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786546203984
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786546382823
+      }
+    ],
+    "1. Add per-element geometry to the shared data models": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526826230
+      }
+    ],
+    "10. Retarget the localization model in CDK": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526827866
+      }
+    ],
+    "10.2 Update the CDK template smoke tests": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786526847427
+      },
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527353103
+      }
+    ],
+    "2.2 Update `.pdf` extraction unit tests": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527365781
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786540805672
+      }
+    ],
+    "2.4 Update `.docx` extraction unit tests": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527367284
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786540807386
+      }
+    ],
+    "3.12 Update and retarget the example/edge/structural unit tests for `ocr.py`": [
+      {
+        "executionId": "240d5216-a180-4ca6-9f57-06c80fe48071",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786527368750
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541601803
+      }
+    ],
+    "2. Supply image bytes from extraction (the redaction prerequisite)": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786540809470
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786540811384
+      }
+    ],
+    "3.2 Write property test for the pinned-model gating (JSON-shaped responses)": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541603358
+      }
+    ],
+    "3.4 Write property test for coordinate-normalization totality": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541605036
+      }
+    ],
+    "3.5 Write property test for pixel-vs-fractional interpretation": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541606799
+      }
+    ],
+    "3. Extend `recognize_image_text` to Sonnet OCR-with-geometry": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541608239
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541611483
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541616285
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541619198
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541620904
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541622484
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541623935
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541625364
+      }
+    ],
+    "3.8 Write property test for recognized-text assembly and offset comparability": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541609938
+      }
+    ],
+    "3.9 Write property test for the inference-configuration pinning": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541613094
+      }
+    ],
+    "3.10 Write property test for the PII-safe audit record": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541614649
+      }
+    ],
+    "3.11 Write property test for the instance-preservation contract": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786541617737
+      }
+    ],
+    "6. Teach the PDF redactor to act on `image:` spans": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542527458
+      }
+    ],
+    "7. Teach the DOCX redactor to act on `image:` spans": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542529069
+      }
+    ],
+    "8. Thread `image_regions` through orchestration": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542845225
+      }
+    ],
+    "5.3 Write property test for span-coverage under reliable geometry": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542867492
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544041017
+      }
+    ],
+    "5.4 Write property test for exact offset-overlap box inclusion": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542869493
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544042836
+      }
+    ],
+    "5.5 Write property test for padding expand-then-clamp": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542871250
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544044390
+      }
+    ],
+    "5.6 Write property test for the whole-image fallback triggers": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542873006
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544045883
+      }
+    ],
+    "5.7 Write unit tests for decode/encode failure and drawing": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542874686
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544049258
+      }
+    ],
+    "6.2 Write property test that `text:`/`ocr:` redaction is unchanged (PDF)": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542882317
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544064505
+      }
+    ],
+    "6.3 Write unit tests for PDF `image:` redaction and manipulation-failure semantics": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542883896
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544066325
+      }
+    ],
+    "7.2 Write unit tests for DOCX `image:` redaction": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542885487
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544067978
+      }
+    ],
+    "8.2 Write property test for the localization-degrades / manipulation-fails split": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542887199
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544069486
+      }
+    ],
+    "8.3 Write property test that a no-span image is left byte-identical": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542889015
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544071094
+      }
+    ],
+    "8.4 Update orchestration wiring tests": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786542890724
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544072809
+      }
+    ],
+    "5. Build the image-manipulation module `redaction_image.py`": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544047483
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544051074
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544052858
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544054421
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786544056134
+      }
+    ],
+    "12.1 Write the env-guarded real-Sonnet recall + redaction integration test": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786545963438
+      },
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786546202322
+      }
+    ],
+    "11. Vendor Pillow into the backend and the agent bundle": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786545965079
+      }
+    ],
+    "12. Prove the in-image leak is closed end to end (env-guarded, real Sonnet)": [
+      {
+        "executionId": "a4ae4aed-e5ca-4157-ab11-1aa2451867a9",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786546205671
+      }
+    ]
+  }
+}

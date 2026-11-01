@@ -1,0 +1,9 @@
+-r requirements.txt
+pytest==8.3.3
+hypothesis==6.112.1
+moto==5.0.13
+# boto3 must satisfy bedrock-agentcore 1.20.0 (requires boto3>=1.43.31), which
+# is pulled in transitively via requirements.txt. The previous pin (1.35.24)
+# predated the AgentCore SDK being added to requirements.txt and now conflicts.
+# 1.43.66 resolves cleanly with moto 5.0.13 and strands 1.50.2; full suite green.
+boto3==1.43.66

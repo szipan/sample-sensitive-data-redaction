@@ -1,0 +1,269 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Record the Converse engine on `ImageRegion` in `shared/models.py`": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518011711
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518072575
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518900051
+      }
+    ],
+    "2.1 Rewrite `backend/agent/tools/ocr.py` configuration, prompt, model-id predicate, and lazy client": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518014833
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518074302
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518901633
+      }
+    ],
+    "2.3 Implement image-format detection from magic bytes": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518017554
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518915956
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519022943
+      }
+    ],
+    "2.5 Implement the Converse call, response read, size guard, audit record, and the public entrypoint": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518020235
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519030462
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519394982
+      }
+    ],
+    "3. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518023073
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520177808
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520446477
+      }
+    ],
+    "4.1 Wrap `recognize_image_text` belt-and-braces in `handle_job`": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518025700
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519396494
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519904342
+      }
+    ],
+    "5.1 Add the image-OCR model id, env var, and scoped invoke grant": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518028587
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518075599
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518903187
+      }
+    ],
+    "7. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518031387
+      },
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520453888
+      }
+    ],
+    "1. Update the shared model docstrings": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518904694
+      }
+    ],
+    "5. Provision the model and its permission in CDK": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786518906305
+      }
+    ],
+    "2. Reimplement `recognize_image_text` on Bedrock Converse": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519398051
+      }
+    ],
+    "4. Wire the best-effort call site into orchestration": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519908003
+      }
+    ],
+    "2.2 Write property test for model-identifier gating": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519919341
+      }
+    ],
+    "2.4 Write property test for format declaration": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519926572
+      }
+    ],
+    "2.6 Write property test for per-region request accounting": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519933738
+      }
+    ],
+    "2.7 Write property test for recognized-text assignment": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519940767
+      }
+    ],
+    "2.8 Write property test for the instance-preservation contract": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519947992
+      }
+    ],
+    "2.9 Write property test for skipping ineligible images": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519956670
+      }
+    ],
+    "2.10 Write property test for retry accounting": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519963944
+      }
+    ],
+    "2.11 Write property test for the never-raise and partial-results contract": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519971604
+      }
+    ],
+    "2.12 Write property test for the pinned inference configuration": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519978833
+      }
+    ],
+    "2.13 Write property test for the audit record": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519985928
+      }
+    ],
+    "2.14 Write the example, edge-case, and structural unit tests for `ocr.py`": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786519995413
+      }
+    ],
+    "5.2 Write CDK template smoke tests in `tests/test_redaction_stack.py`": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520003116
+      }
+    ],
+    "6.1 Write the Chinese-PII image recall integration test": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520010560
+      }
+    ],
+    "6. Prove the CJK recall gap is closed": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520013734
+      }
+    ],
+    "4.2 Write property test for job survival under image-OCR failure": [
+      {
+        "executionId": "3dc2b810-49aa-4167-8172-a69f0c7c3860",
+        "chatSessionId": "sess_67dd6ce7-0b46-4564-a970-025cd28ffb08",
+        "timestamp": 1786520022024
+      }
+    ]
+  }
+}

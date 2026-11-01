@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+cdk.out/
+.pytest_cache/
+*.egg-info/
+
+# Deployment artifacts (built locally, not source code)
+agent_bundle/deps/
+agent_bundle/package/
+agent_bundle/package_clean/
+
+# Temporary files
+dispatcher_out.json
+dispatcher_output.json
+fix_rules.py
+invoke_payload.json
+key1.json
+val1.json

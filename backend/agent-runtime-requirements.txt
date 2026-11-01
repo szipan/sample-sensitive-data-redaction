@@ -1,0 +1,27 @@
+# RUNTIME dependency set vendored into the AgentCore agent bundle.
+#
+# This is the runtime-only dependency closure for the Strands redaction agent
+# that ships inside `agent_bundle/` — deliberately SEPARATE from
+# `requirements.txt`, which also carries CDK build-time deps
+# (aws-cdk-lib / constructs). Only the five top-level runtime pins below belong
+# here; their transitive deps (pyyaml, mcp>=1.23.0, boto3/botocore, pydantic,
+# etc.) are resolved by pip from strands-agents 1.50.2 and are NOT listed
+# explicitly. aws-cdk-lib / constructs are build-time only and MUST NOT appear
+# here.
+#
+# These are rebuilt into `agent_bundle/` by `scripts/build_agent_bundle.py`,
+# which downloads/installs them as Linux ARM64 / CPython 3.12 (cp312) wheels.
+# Rebuilding currently requires a Linux resolution context (WSL/Docker/Linux);
+# see that script's KNOWN LIMITATION.
+#
+# Pillow (import name `PIL`) is used by agent/tools/redaction_image.py for
+# in-image redaction (decode -> draw black rectangles -> re-encode). Pinned to
+# 11.0.0, which publishes cp312 aarch64 manylinux wheels
+# (`manylinux_2_28_aarch64` / `manylinux2014_aarch64`) so the builder can
+# cross-download it for Linux ARM64 / CPython 3.12 exactly like PyMuPDF; wheel
+# availability was verified against PyPI before pinning.
+PyMuPDF==1.28.0
+python-docx==1.1.2
+Pillow==11.0.0
+strands-agents==1.50.2
+bedrock-agentcore==1.20.0
