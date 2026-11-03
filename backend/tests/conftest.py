@@ -276,7 +276,7 @@ FAKE_PIPELINE_JOB_ID = "22222222-2222-2222-2222-222222222222"
 #: Raster resolution used for the `.pdf` path. `MIN_RASTER_DPI` exactly, so
 #: `_read_raster_dpi` accepts it without emitting its misconfiguration
 #: warning (which would add a record whose count the record-count property would have to
-#: account for) while keeping `page.get_pixmap()` cheap enough to run inside
+#: account for) while keeping page rasterization cheap enough to run inside
 #: a 100-iteration Hypothesis loop.
 FAKE_PIPELINE_RASTER_DPI = "72"
 
@@ -675,15 +675,9 @@ def _build_docx_bytes(markers: PlantedMarkers) -> bytes:
 
 def _build_pdf_bytes(markers: PlantedMarkers) -> bytes:
     """A one-page `.pdf` whose text layer carries the planted markers."""
-    import fitz  # PyMuPDF
+    from tests.pdf_fixtures import simple_text_pdf
 
-    document = fitz.open()
-    try:
-        page = document.new_page()
-        page.insert_text((72, 72), markers.planted_body_text())
-        return document.tobytes()
-    finally:
-        document.close()
+    return simple_text_pdf([markers.planted_body_text()])
 
 
 def _make_fake_job(markers: PlantedMarkers, extension: str):

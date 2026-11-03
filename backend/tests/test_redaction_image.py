@@ -9,7 +9,7 @@ filled black rectangles, and re-encodes in the same format. The correctness
 spine is: detected in-image PII must never remain visible.
 
 Because these tests decode real PNGs with Pillow (a real dev/runtime
-dependency), this module belongs in the SECOND (real-`fitz`/`docx`) pytest
+dependency), this module belongs in the SECOND (real PDF/`docx`) pytest
 process group, alongside `tests/test_redaction_pdf.py` /
 `tests/test_redaction_docx.py`.
 
@@ -357,6 +357,41 @@ def test_palettized_p_mode_image_is_handled():
     decoded = Image.open(BytesIO(out)).convert("RGB")
     assert decoded.getpixel((0, 0)) == (0, 0, 0)
     assert decoded.getpixel((39, 29)) == (0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "mode,fmt,light",
+    [("L", "PNG", 200), ("L", "JPEG", 200), ("1", "PNG", 1)],
+)
+def test_single_channel_image_targeted_box_is_black(monkeypatch, mode, fmt, light):
+    """Grayscale (`L`) and bilevel (`1`) images are redacted without error:
+    the box is black, the rest is preserved, and the output decodes."""
+    monkeypatch.setenv(BOX_PADDING_ENV_VAR, "0")
+    W, H = 100, 100
+    buffer = BytesIO()
+    Image.new(mode, (W, H), light).save(buffer, format=fmt)
+    src = buffer.getvalue()
+    assert Image.open(BytesIO(src)).mode == mode
+
+    box = BoundingBox(left=0.1, top=0.1, width=0.3, height=0.3)
+    out = redact_image_bytes(src, _region([_element("secret", 0, 6, box)]), [_span(0, 6)])
+
+    result = Image.open(BytesIO(out))
+    assert result.format == fmt
+    gray = result.convert("L")
+    assert gray.getpixel((25, 25)) == 0
+    assert gray.getpixel((90, 90)) >= 190
+
+
+@pytest.mark.parametrize("mode,fmt", [("L", "PNG"), ("L", "JPEG"), ("1", "PNG")])
+def test_single_channel_image_whole_image_fallback_is_black(mode, fmt):
+    """Whole-image fallback on `L`/`1` images blacks out every pixel."""
+    buffer = BytesIO()
+    Image.new(mode, (30, 20), 1 if mode == "1" else 200).save(buffer, format=fmt)
+    out = redact_image_bytes(buffer.getvalue(), _region(None), [_span(0, 3)])
+    gray = Image.open(BytesIO(out)).convert("L")
+    assert gray.getpixel((0, 0)) == 0
+    assert gray.getpixel((29, 19)) == 0
 
 
 def test_output_format_matches_input_png():

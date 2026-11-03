@@ -1,6 +1,6 @@
 """Unit tests for `agent/tools/redaction_pdf.py` (`redact_pdf_document`).
 
-Builds test PDFs on the fly with `fitz` (PyMuPDF), runs the real
+Builds test PDFs on the fly with `tests/pdf_fixtures.py` (pypdf based), runs the real
 `extract_pdf_content` + `match_rules` pipeline to
 produce realistic `text_units`/`match_spans`, then calls
 `redact_pdf_document` and re-parses the RESULT with `extract_pdf_content`
@@ -8,7 +8,7 @@ again to assert (per design.md's `redact_document` `.pdf` row and
 Correctness Properties 12/16):
 
 - Matched text no longer appears anywhere in the redacted document's
-  extracted text (permanent erasure via `apply_redactions`).
+  extracted text (permanent erasure from the content streams).
 - Page count and page order are unchanged.
 - Non-matching text elsewhere on the page survives.
 - Zero matches leaves the extracted text unchanged.
@@ -18,12 +18,15 @@ The final group of tests covers the dual-path additions:
 `"ocr:"` spans resolving through Textract word geometry, and the per-path /
 agreement counts in `PdfRedactionReport`.
 """
+import io
 import sys
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
-import fitz  # PyMuPDF
+import pikepdf
+import pypdf
+import pypdfium2 as pdfium
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -32,6 +35,7 @@ from PIL import Image
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
+from agent.tools import redaction_pdf  # noqa: E402
 from agent.tools.extraction_pdf import extract_pdf_content  # noqa: E402
 from agent.tools.matching import match_rules  # noqa: E402
 from agent.tools.redaction_pdf import (  # noqa: E402
@@ -39,6 +43,18 @@ from agent.tools.redaction_pdf import (  # noqa: E402
     RedactionError,
     redact_pdf_document,
     redact_pdf_document_with_report,
+)
+from tests.pdf_fixtures import (  # noqa: E402
+    CJK_FONT,
+    DocSpec,
+    ImageSpec,
+    FormPlacement,
+    FormSpec,
+    PageSpec,
+    TextRun,
+    build_pdf,
+    simple_multi_page_pdf,
+    simple_text_pdf,
 )
 from shared.models import (  # noqa: E402
     BoundingBox,
@@ -64,24 +80,11 @@ def _rule(rule_name: str, pattern: str, enabled: bool = True) -> RedactionRule:
 
 
 def _build_single_page_pdf(text: str) -> bytes:
-    document = fitz.open()
-    try:
-        page = document.new_page()
-        page.insert_text((72, 72), text)
-        return document.tobytes()
-    finally:
-        document.close()
+    return simple_text_pdf([text])
 
 
 def _build_multi_page_pdf(page_texts):
-    document = fitz.open()
-    try:
-        for text in page_texts:
-            page = document.new_page()
-            page.insert_text((72, 72), text)
-        return document.tobytes()
-    finally:
-        document.close()
+    return simple_multi_page_pdf([[text] for text in page_texts])
 
 
 def _extracted_text(pdf_bytes: bytes) -> str:
@@ -94,9 +97,9 @@ def _extracted_text(pdf_bytes: bytes) -> str:
 #
 # Build small real PNGs with Pillow and embed them in a real PDF so the
 # `image:` redaction path (decode -> draw -> re-encode -> re-embed) can be
-# exercised end to end. `Page.replace_image` is stubbed in the tests so the
-# assertions focus on WHAT the redactor hands to re-embedding rather than on
-# PyMuPDF's own stream-swap side effects.
+# exercised end to end. `write_back_image` is wrapped with `mock.patch.object(...,
+# wraps=...)` so the assertions see WHAT the redactor hands to re-embedding while
+# the real write-back still runs.
 # ---------------------------------------------------------------------------
 
 
@@ -106,26 +109,38 @@ def _make_png(width: int, height: int, color=(255, 255, 255)) -> bytes:
     return buf.getvalue()
 
 
+def _image_xref(pdf_bytes: bytes) -> int:
+    """Object number of the first image XObject, as derived by the extractor
+    for `sourceLocation`."""
+    with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
+        for obj in pdf.objects:
+            if isinstance(obj, pikepdf.Stream) and obj.get("/Subtype") == "/Image":
+                return obj.objgen[0]
+    raise AssertionError("fixture has no image")
+
+
+def _image_spec_for(image_bytes: bytes, placement) -> ImageSpec:
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    return ImageSpec(
+        kind="rgb",
+        width=image.width,
+        height=image.height,
+        color=image.getpixel((0, 0)),
+        placements=(placement,),
+    )
+
+
 def _build_pdf_with_image(page_text: str, image_bytes: bytes) -> tuple:
     """Return `(pdf_bytes, xref)` for a one-page PDF carrying `page_text` and a
-    single embedded image, where `xref` is the image's XObject number as seen
-    when the serialized bytes are reopened (the same value the redactor derives
-    from `sourceLocation`)."""
-    document = fitz.open()
-    try:
-        page = document.new_page()
-        page.insert_text((72, 72), page_text)
-        page.insert_image(fitz.Rect(72, 120, 272, 220), stream=image_bytes)
-        pdf_bytes = document.tobytes()
-    finally:
-        document.close()
-
-    reopened = fitz.open(stream=pdf_bytes, filetype="pdf")
-    try:
-        xref = reopened.load_page(0).get_images(full=True)[0][0]
-    finally:
-        reopened.close()
-    return pdf_bytes, xref
+    single embedded image (200x100 pt box, 120 pt below the top), where `xref`
+    is the image's XObject number (the same value the redactor derives from
+    `sourceLocation`)."""
+    page = PageSpec(
+        runs=(TextRun(page_text, x=72, y=792 - 72),),
+        images=(_image_spec_for(image_bytes, (72.0, 792.0 - 220.0, 200.0, 100.0)),),
+    )
+    pdf_bytes = build_pdf(DocSpec(pages=(page,)))
+    return pdf_bytes, _image_xref(pdf_bytes)
 
 
 def _element(
@@ -242,7 +257,7 @@ def test_image_referenced_span_is_now_acted_on_not_skipped():
     """in-image-redaction reversal of the pre-feature behavior: an `image:`
     span used to be dropped with a bare `continue`, leaving detected in-image
     PII visible. It must now be acted on — the referenced embedded image is
-    redacted and re-embedded via `page.replace_image`, while the page's own
+    redacted and re-embedded via `write_back_image`, while the page's own
     non-image text is left untouched.
     """
     png = _make_png(200, 100, (255, 255, 255))
@@ -257,17 +272,19 @@ def test_image_referenced_span_is_now_acted_on_not_skipped():
         zone="image", unitRef="image:0", startOffset=0, endOffset=8, ruleName="mobile"
     )
 
-    with mock.patch.object(fitz.Page, "replace_image") as replace_image:
+    with mock.patch.object(
+        redaction_pdf, "write_back_image", wraps=redaction_pdf.write_back_image
+    ) as write_back:
         redacted_bytes = redact_pdf_document(
             pdf_bytes, [], [image_span], image_regions=[region]
         )
 
     # The image span was acted on (not skipped): the embedded image was
     # re-embedded exactly once with the redacted bytes for the right xref.
-    assert replace_image.call_count == 1
-    call = replace_image.call_args
-    assert call.args[0] == xref
-    assert isinstance(call.kwargs["stream"], bytes) and call.kwargs["stream"]
+    assert write_back.call_count == 1
+    call = write_back.call_args
+    assert call.args[1] == xref
+    assert isinstance(call.args[2], bytes) and call.args[2]
     # The page's own (non-image) text is unchanged by image redaction.
     assert "Plain text with no matches" in _extracted_text(redacted_bytes)
 
@@ -303,19 +320,29 @@ def test_invalid_pdf_bytes_raise_redaction_error():
 
 def _normalized_box_for(pdf_bytes: bytes, page_index: int, needle: str) -> BoundingBox:
     """Locate `needle` on a page and return its box in Textract's normalized
-    (0-1, fractions of the page rectangle) coordinate space."""
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    (0-1, fractions of the page rectangle) coordinate space. Character boxes
+    come from PDFium."""
+    document = pdfium.PdfDocument(pdf_bytes)
     try:
-        page = document.load_page(page_index)
-        hits = page.search_for(needle)
-        assert hits, "fixture text {!r} not found on page {}".format(needle, page_index)
-        rect = hits[0]
-        page_rect = page.rect
+        page = document[page_index]
+        textpage = page.get_textpage()
+        full_text = textpage.get_text_range()
+        start = full_text.find(needle)
+        assert start >= 0, "fixture text {!r} not found on page {}".format(
+            needle, page_index
+        )
+        boxes = [textpage.get_charbox(i) for i in range(start, start + len(needle))]
+        x0 = min(b[0] for b in boxes)
+        y0 = min(b[1] for b in boxes)
+        x1 = max(b[2] for b in boxes)
+        y1 = max(b[3] for b in boxes)
+        ox, oy, ex, ey = page.get_mediabox()
+        width, height = ex - ox, ey - oy
         return BoundingBox(
-            left=(rect.x0 - page_rect.x0) / page_rect.width,
-            top=(rect.y0 - page_rect.y0) / page_rect.height,
-            width=rect.width / page_rect.width,
-            height=rect.height / page_rect.height,
+            left=(x0 - ox) / width,
+            top=(ey - y1) / height,
+            width=(x1 - x0) / width,
+            height=(y1 - y0) / height,
         )
     finally:
         document.close()
@@ -503,13 +530,15 @@ def test_image_referenced_spans_are_counted_in_neither_path():
         zone="image", unitRef="image:0", startOffset=0, endOffset=8, ruleName="mobile"
     )
 
-    with mock.patch.object(fitz.Page, "replace_image") as replace_image:
+    with mock.patch.object(
+        redaction_pdf, "write_back_image", wraps=redaction_pdf.write_back_image
+    ) as write_back:
         result = redact_pdf_document_with_report(
             pdf_bytes, [], [image_span], image_regions=[region]
         )
 
     # The image was acted on, but contributes to none of the report counts.
-    assert replace_image.call_count == 1
+    assert write_back.call_count == 1
     assert result.report == PdfRedactionReport(0, 0, 0)
     assert "Plain text with no matches" in _extracted_text(result.documentBytes)
 
@@ -542,14 +571,9 @@ def test_property_11_text_and_ocr_spans_redacted_unchanged(secrets):
     redactions — same extracted text and same per-path report — while the
     detected values are still erased.
     """
-    document = fitz.open()
-    try:
-        page = document.new_page()
-        for i, secret in enumerate(secrets):
-            page.insert_text((72, 72 + i * 24), f"row {i} value {secret}")
-        pdf_bytes = document.tobytes()
-    finally:
-        document.close()
+    pdf_bytes = simple_text_pdf(
+        [f"row {i} value {secret}" for i, secret in enumerate(secrets)], leading=24
+    )
 
     extraction = extract_pdf_content(pdf_bytes)
     text_matches = match_rules(
@@ -597,7 +621,7 @@ def test_property_11_text_and_ocr_spans_redacted_unchanged(secrets):
 
 def test_image_span_targeted_redaction_blacks_out_element_region():
     """Reliable geometry + a span that overlaps an element -> targeted
-    redaction: the redactor hands `page.replace_image` bytes whose element
+    redaction: the redactor hands `write_back_image` bytes whose element
     region is black while the rest of the image is untouched (Requirements
     1.1, 1.2)."""
     png = _make_png(200, 100, (255, 255, 255))
@@ -612,15 +636,17 @@ def test_image_span_targeted_redaction_blacks_out_element_region():
         zone="image", unitRef="image:0", startOffset=0, endOffset=8, ruleName="mobile"
     )
 
-    with mock.patch.object(fitz.Page, "replace_image") as replace_image:
+    with mock.patch.object(
+        redaction_pdf, "write_back_image", wraps=redaction_pdf.write_back_image
+    ) as write_back:
         redact_pdf_document_with_report(
             pdf_bytes, [], [span], image_regions=[region]
         )
 
-    assert replace_image.call_count == 1
-    call = replace_image.call_args
-    assert call.args[0] == xref  # re-embedded against the correct xref
-    new_bytes = call.kwargs["stream"]
+    assert write_back.call_count == 1
+    call = write_back.call_args
+    assert call.args[1] == xref  # re-embedded against the correct xref
+    new_bytes = call.args[2]
     assert isinstance(new_bytes, bytes)
 
     img = Image.open(BytesIO(new_bytes)).convert("RGB")
@@ -648,13 +674,15 @@ def test_image_span_whole_image_fallback_blacks_out_entire_image():
         zone="image", unitRef="image:0", startOffset=0, endOffset=8, ruleName="mobile"
     )
 
-    with mock.patch.object(fitz.Page, "replace_image") as replace_image:
+    with mock.patch.object(
+        redaction_pdf, "write_back_image", wraps=redaction_pdf.write_back_image
+    ) as write_back:
         redact_pdf_document_with_report(
             pdf_bytes, [], [span], image_regions=[region]
         )
 
-    assert replace_image.call_count == 1
-    new_bytes = replace_image.call_args.kwargs["stream"]
+    assert write_back.call_count == 1
+    new_bytes = write_back.call_args.args[2]
     img = Image.open(BytesIO(new_bytes)).convert("RGB")
     w, h = img.size
     for point in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w // 2, h // 2)]:
@@ -685,10 +713,11 @@ def _displayed_image_black_fraction(pdf_bytes: bytes, page_index: int) -> float:
     pixels. Rendering (rather than reading an image xref) is what proves which
     image the page actually DISPLAYS — the exact thing the orphan-xref bug got
     wrong."""
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    document = pdfium.PdfDocument(pdf_bytes)
     try:
-        pix = document.load_page(page_index).get_pixmap(dpi=100)
-        image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        image = (
+            document[page_index].render(scale=100 / 72).to_pil().convert("RGB")
+        )
     finally:
         document.close()
     w, h = image.size
@@ -709,40 +738,35 @@ def test_image_whole_image_fallback_survives_overlapping_text_redaction():
     rectangle that OVERLAPS an embedded image must not defeat the image's own
     `image:` redaction.
 
-    The bug: `page.apply_redactions()` (default image handling) rewrites any
-    image a redaction annotation touches into a NEW xref. Since the `image:`
-    redaction re-embeds via `page.replace_image(xref, ...)` using the
-    extraction-time xref, the redacted image landed on the now-orphaned old
-    xref while the page kept displaying the untouched, renumbered image — so
-    in-image PII stayed visible even though a fully-black image was written
-    into the file. The fix applies redactions with
-    `images=PDF_REDACT_IMAGE_NONE`, keeping image xrefs stable.
+    The original bug: the previous redaction engine rewrote any image a
+    redaction rectangle touched into a NEW xref, so the `image:` redaction
+    (which re-embeds against the extraction-time xref) landed on an orphaned
+    object while the page kept displaying the untouched image. The current
+    implementation keeps image xrefs stable; this test guards that property.
 
     This builds a PDF whose text sits ON TOP of a white embedded image, marks
     that text for redaction (a `text:` span whose rectangle overlaps the
     image), and marks the image itself for a Whole_Image_Fallback redaction
     (`recognizedElements=None`). It then RENDERS the output page and asserts
-    the displayed image region is predominantly black — i.e. `replace_image`
+    the displayed image region is predominantly black — i.e. `write_back_image`
     landed on the image the page actually shows.
     """
     png = _make_png(400, 300, (255, 255, 255))
-    document = fitz.open()
-    try:
-        page = document.new_page(width=420, height=320)
-        # Image fills almost the whole page ...
-        page.insert_image(fitz.Rect(10, 10, 410, 310), stream=png)
-        # ... and the sensitive text is drawn ON TOP of the image, so its
-        # redaction rectangle necessarily overlaps the image.
-        page.insert_text((40, 60), "ID 13800001111 on the image")
-        pdf_bytes = document.tobytes()
-    finally:
-        document.close()
-
-    reopened = fitz.open(stream=pdf_bytes, filetype="pdf")
-    try:
-        xref = reopened.load_page(0).get_images(full=True)[0][0]
-    finally:
-        reopened.close()
+    # Image fills almost the whole page (drawn first); the sensitive text sits
+    # in a Form XObject placed after it, i.e. ON TOP of the image, so its
+    # redaction rectangle necessarily overlaps the image.
+    page = PageSpec(
+        media_box=(0, 0, 420, 320),
+        images=(_image_spec_for(png, (10.0, 10.0, 400.0, 300.0)),),
+        form_placements=(FormPlacement("overlay"),),
+    )
+    overlay = FormSpec(
+        name="overlay",
+        bbox=(0, 0, 420, 320),
+        runs=(TextRun("ID 13800001111 on the image", x=40, y=320 - 60),),
+    )
+    pdf_bytes = build_pdf(DocSpec(pages=(page,), forms=(overlay,)))
+    xref = _image_xref(pdf_bytes)
 
     extraction = extract_pdf_content(pdf_bytes)
     text_matches = match_rules(
@@ -816,12 +840,85 @@ def test_text_redaction_unchanged_when_image_regions_present_but_no_image_span()
         f"page:0:xref:{xref}", png, recognized_text="x", elements=None
     )
 
-    with mock.patch.object(fitz.Page, "replace_image") as replace_image:
+    with mock.patch.object(
+        redaction_pdf, "write_back_image", wraps=redaction_pdf.write_back_image
+    ) as write_back:
         result = redact_pdf_document_with_report(
             pdf_bytes, extraction.textUnits, matches, image_regions=[region]
         )
 
-    assert replace_image.call_count == 0  # no image: span -> image untouched
+    assert write_back.call_count == 0  # no image: span -> image untouched
     redacted_text = _extracted_text(result.documentBytes)
     assert "13800001111" not in redacted_text
     assert "details" in redacted_text
+
+
+# ---------------------------------------------------------------------------
+# Additions for the pypdf / pypdfium2 / pikepdf stack: CJK text, PII split
+# across lines, and an extraction path independent of the redactor's own.
+# ---------------------------------------------------------------------------
+
+
+def _pypdf_text(pdf_bytes: bytes) -> str:
+    reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+    return "".join(page.extract_text() for page in reader.pages)
+
+
+def test_cjk_text_is_redacted_and_surrounding_text_survives():
+    pdf_bytes = build_pdf(
+        DocSpec(
+            pages=(
+                PageSpec(
+                    runs=(
+                        TextRun("客户张三丰电话", x=72, y=700, font=CJK_FONT, size=14),
+                        TextRun("Plain footer text", x=72, y=650),
+                    )
+                ),
+            )
+        )
+    )
+    assert "张三丰" in _pypdf_text(pdf_bytes)  # sanity: fixture is extractable
+    extraction = extract_pdf_content(pdf_bytes)
+    matches = match_rules(
+        extraction.textUnits, extraction.imageRegions, [_rule("name", "张三丰")]
+    )
+    assert len(matches) == 1
+
+    redacted_bytes = redact_pdf_document(pdf_bytes, extraction.textUnits, matches)
+
+    assert "张三丰" not in _extracted_text(redacted_bytes)
+    assert "张三丰" not in _pypdf_text(redacted_bytes)
+    assert "客户" in _extracted_text(redacted_bytes)
+    assert "电话" in _extracted_text(redacted_bytes)
+    assert "Plain footer text" in _pypdf_text(redacted_bytes)
+
+
+def test_pii_split_across_lines_is_redacted():
+    pdf_bytes = build_pdf(
+        DocSpec(
+            pages=(
+                PageSpec(
+                    runs=(
+                        TextRun("Ref 123-45-", x=72, y=700),
+                        TextRun("6789 end", x=72, y=686),
+                        TextRun("Untouched trailer", x=72, y=600),
+                    )
+                ),
+            )
+        )
+    )
+    extraction = extract_pdf_content(pdf_bytes)
+    matches = match_rules(
+        extraction.textUnits,
+        extraction.imageRegions,
+        [_rule("ssn", r"\d{3}-\d{2}-\s*\d{4}")],
+    )
+    assert len(matches) == 1  # sanity: the split value is matched as one span
+
+    redacted_bytes = redact_pdf_document(pdf_bytes, extraction.textUnits, matches)
+
+    for text in (_extracted_text(redacted_bytes), _pypdf_text(redacted_bytes)):
+        squeezed = "".join(text.split())
+        assert "123-45-" not in squeezed
+        assert "6789" not in squeezed
+    assert "Untouched trailer" in _pypdf_text(redacted_bytes)

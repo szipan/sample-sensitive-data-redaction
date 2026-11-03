@@ -17,7 +17,7 @@ The work proceeds root-cause first, then along the pipeline:
    unaffected.
 2. **Extraction** is made to actually supply image bytes — the root cause that
    today leaves in-image PII undetected and unredacted: the `.pdf` extractor
-   populates `imageBytes` via `extract_image(xref)`, and the `.docx` extractor
+   populates `imageBytes` via `pdf_images.decode_image(pdf, xref)`, and the `.docx` extractor
    (which emits no image regions at all today) begins emitting one `ImageRegion`
    per media part with a stable `docx:part:{partname}` re-embedding handle.
 3. **`ocr.py` is extended** (not rewritten) to retarget to Sonnet and return
@@ -30,7 +30,7 @@ The work proceeds root-cause first, then along the pipeline:
    decide targeted-vs-whole-image, draw filled black rectangles, re-encode in
    the same format.
 5. **Both redactors** stop skipping `image:` spans, gain an `image_regions`
-   parameter, and re-embed the modified image (`page.replace_image` for `.pdf`,
+   parameter, and re-embed the modified image (`pdf_images.write_back_image` for `.pdf`,
    image-part blob replacement for `.docx`).
 6. **Orchestration** threads `content.imageRegions` into the redactor. Pipeline
    order is unchanged.
@@ -70,14 +70,14 @@ touch it.
 
 - [x] 2. Supply image bytes from extraction (the redaction prerequisite)
   - [x] 2.1 Populate `imageBytes` in the `.pdf` extractor
-    - Edit `backend/agent/tools/extraction_pdf.py`: in `_extract_image_regions`, call `document.extract_image(xref)` and set `imageBytes = extracted["image"]` when present
+    - Edit `backend/agent/tools/extraction_pdf.py`: in `_extract_image_regions`, call `pdf_images.decode_image(pdf, xref)` and set `imageBytes` to the returned bytes when not `None`
     - Keep the existing `sourceLocation` format `"page:{pageIndex}:xref:{xref}"` and `boundingBox` unchanged — the xref remains the re-embed handle
-    - IF `extract_image` fails or returns no/undecodable stream, THEN leave `imageBytes=None`; the region is then skipped by OCR, carries no spans, and the redactor never touches it (best-effort posture)
-    - Thread the `document` (or a bound closure) into `_extract_image_regions` so it can call the document-level `extract_image`
+    - IF `decode_image` fails or returns no/undecodable stream, THEN leave `imageBytes=None`; the region is then skipped by OCR, carries no spans, and the redactor never touches it (best-effort posture)
+    - Thread the `document` (or a bound closure) into `_extract_image_regions` so it can call the `pdf_images` reader
     - _Requirements: 1.1_
 
   - [x]* 2.2 Update `.pdf` extraction unit tests
-    - Edit `tests/test_extraction_pdf.py`: assert `imageBytes` is now populated from `extract_image`, and that `sourceLocation`/`boundingBox` are unchanged; add an extract-failure case asserting `imageBytes=None`
+    - Edit `tests/test_extraction_pdf.py`: assert `imageBytes` is now populated from `pdf_images.decode_image`, and that `sourceLocation`/`boundingBox` are unchanged; add an extract-failure case asserting `imageBytes=None`
     - _Requirements: 1.1_
 
   - [x] 2.3 Emit `ImageRegion`s from the `.docx` extractor
@@ -199,16 +199,16 @@ touch it.
 
   - [x]* 5.7 Write unit tests for decode/encode failure and drawing
     - New module `tests/test_redaction_image.py`: assert a targeted redaction blacks out the expected region on a generated PNG (decoded pixels), a `P`-mode image is handled, the output format matches the input, and an undecodable byte string raises `ImageRedactionError`
-    - Uses real Pillow (decoding real PNGs) — belongs in the real-`fitz`/`docx` test process (see Notes)
+    - Uses real Pillow (decoding real PNGs) — belongs in the real-PDF-library/`docx` test process (see Notes)
     - _Requirements: 1.1, 7.3_
 
 - [x] 6. Teach the PDF redactor to act on `image:` spans
   - [x] 6.1 Add the `image:` handler and `image_regions` parameter to `redaction_pdf.py`
     - Edit `backend/agent/tools/redaction_pdf.py`: add an optional `image_regions=None` parameter to both `redact_pdf_document_with_report` and the `bytes`-returning wrapper `redact_pdf_document`
     - Replace the bare `continue` that drops non-`text:`/`ocr:` spans with an `image:` handler: group `image:` spans by region index, resolve `image:{index}` → `ImageRegion`, and for each referenced region call `redaction_image.redact_image_bytes(region.imageBytes, region, spans)`, wrapping `ImageRedactionError` into `RedactionError`
-    - Re-embed via `page.replace_image(xref, stream=new_bytes)`, deriving `pageIndex`/`xref` from `sourceLocation` (`"page:{pageIndex}:xref:{xref}"`); run image replacement after `apply_redactions`, then serialize once with `document.tobytes()` as today
+    - Re-embed via `pdf_images.write_back_image(pdf, xref, new_bytes)`, deriving `pageIndex`/`xref` from `sourceLocation` (`"page:{pageIndex}:xref:{xref}"`); run image replacement after `pdf_content_edit` text redactions, then serialize once as today
     - Defensively raise `RedactionError` if a span references a region with no `imageBytes` (a wiring bug, matching the existing out-of-range guards)
-    - Leave the `text:`/`ocr:` redaction path and the `PdfRedactionReport` counts byte-for-byte unchanged; import `fitz` lazily as today
+    - Leave the `text:`/`ocr:` redaction path and the `PdfRedactionReport` counts byte-for-byte unchanged; import the PDF libraries lazily as today
     - _Requirements: 1.1, 1.2, 1.4, 7.3, 10.2_
 
   - [x]* 6.2 Write property test that `text:`/`ocr:` redaction is unchanged (PDF)
@@ -217,8 +217,8 @@ touch it.
     - **Validates: Requirements 1.4, 10.2; Property 11**
 
   - [x]* 6.3 Write unit tests for PDF `image:` redaction and manipulation-failure semantics
-    - Edit `tests/test_redaction_pdf.py`: add targeted-redaction and whole-image-fallback cases with a stubbed `Page.replace_image`; assert an image decode failure raises `RedactionError`; assert existing `text:`/`ocr:` behavior unchanged
-    - Opens real PDFs — belongs in the real-`fitz`/`docx` test process (see Notes)
+    - Edit `tests/test_redaction_pdf.py`: add targeted-redaction and whole-image-fallback cases with a stubbed `pdf_images.write_back_image`; assert an image decode failure raises `RedactionError`; assert existing `text:`/`ocr:` behavior unchanged
+    - Opens real PDFs — belongs in the real-PDF-library/`docx` test process (see Notes)
     - _Requirements: 1.1, 1.2, 7.3_
 
 - [x] 7. Teach the DOCX redactor to act on `image:` spans
@@ -231,7 +231,7 @@ touch it.
 
   - [x]* 7.2 Write unit tests for DOCX `image:` redaction
     - Edit `tests/test_redaction_docx.py`: add image-part blob replacement by the `docx:part:` handle for both targeted and fallback cases; assert existing text redaction is unchanged
-    - Opens real `.docx` — belongs in the real-`fitz`/`docx` test process (see Notes)
+    - Opens real `.docx` — belongs in the real-PDF-library/`docx` test process (see Notes)
     - _Requirements: 1.1, 1.2, 1.4_
 
 - [x] 8. Thread `image_regions` through orchestration
@@ -270,7 +270,7 @@ touch it.
 
 - [x] 11. Vendor Pillow into the backend and the agent bundle
   - [x] 11.1 Add Pillow as a real backend dependency
-    - Add `Pillow==11.0.0` (verify the pin publishes `cp312` aarch64 manylinux wheels — `manylinux_2_28_aarch64` / `manylinux2014_aarch64` — matching the platforms `build_agent_bundle.py` already downloads for PyMuPDF) to **both** `backend/requirements.txt` and `backend/agent-runtime-requirements.txt`
+    - Add `Pillow==11.0.0` (verify the pin publishes `cp312` aarch64 manylinux wheels — `manylinux_2_28_aarch64` / `manylinux2014_aarch64` — matching the platforms `build_agent_bundle.py` already downloads for the other binary wheels) to **both** `backend/requirements.txt` and `backend/agent-runtime-requirements.txt`
     - The runtime imports Pillow as `PIL`
     - _Requirements: 1.1_
 
@@ -279,7 +279,7 @@ touch it.
     - _Requirements: 1.1_
 
   - [x] 11.3 Rebuild the agent bundle so the aarch64 Pillow wheel is vendored
-    - Run `backend/scripts/build_agent_bundle.py` so the aarch64 cp312 Pillow wheel is downloaded (via pip's `--platform`/`--python-version` flags, the same pattern used for PyMuPDF) and unpacked into `agent_bundle/package_clean/`
+    - Run `backend/scripts/build_agent_bundle.py` so the aarch64 cp312 Pillow wheel is downloaded (via pip's `--platform`/`--python-version` flags, the same pattern used for the other binary wheels) and unpacked into `agent_bundle/package_clean/`
     - The build must run on a Linux host (per the script's KNOWN LIMITATION); confirm the summary reports `PIL`/`pillow` present
     - Deployment (`cdk deploy`) is left to the user and is not part of this task
     - _Requirements: 1.1_
@@ -304,8 +304,8 @@ touch it.
 - Every property test uses **Hypothesis** (already a project dependency — see `backend/.hypothesis/`), runs at least **100 iterations**, and is tagged `Feature: in-image-redaction, Property {number}: {property title}`. No property-based framework is written from scratch.
 - Bedrock is mocked with `unittest.mock`, **not moto**, reusing the `FakeConverseClient`/`SequencedConverseClient`/`BehaviorConverseClient` fakes in `tests/test_ocr.py`; the fake `converse` now returns a **JSON** assistant text (`[{"text": ..., "box": [...]}, ...]`) so the parser and normalizer are exercised. Fake errors carry duck-typed `ClientError`-shaped `response` dicts so the imported `_is_retryable` classifies them as in production. Real model calls appear only in task 12.
 - **Pillow in tests**: the normalizer and offset→box property tests call the pure functions with explicit dimensions and need no Pillow. Tests for `redact_image_bytes` and the re-embed paths generate small in-memory PNGs with Pillow and assert on decoded pixels; these need Pillow, now a real dev dependency.
-- No new third-party dependencies beyond **Pillow**: `boto3`, PyMuPDF (`fitz`), python-docx, and Hypothesis are already in use.
-- Backend tests run as **two separate processes** — the `MagicMock` `sys.modules` `fitz`/`docx` stubs registered by the first command must not contaminate the real-`fitz`/`docx` tests in the second. Image-redaction tests that decode real PNGs and open real `.pdf`/`.docx` belong in the **second** (real-`fitz`/`docx`) process group:
+- No new third-party dependencies beyond **Pillow**: `boto3`, pikepdf, pypdfium2, pdfminer.six, python-docx, and Hypothesis are already in use.
+- Backend tests run as **two separate processes** — the `MagicMock` `sys.modules` PDF-library/`docx` stubs registered by the first command must not contaminate the real-PDF-library/`docx` tests in the second. Image-redaction tests that decode real PNGs and open real `.pdf`/`.docx` belong in the **second** (real-PDF-library/`docx`) process group:
   ```
   .venv\Scripts\python.exe -m pytest tests\test_ocr.py tests\test_orchestration.py tests\test_redaction_stack.py tests\test_guardrails_pii_detect.py tests\test_llm_pii_detect.py -q
   .venv\Scripts\python.exe -m pytest tests\test_extraction_pdf.py tests\test_extraction_docx.py tests\test_redaction_pdf.py tests\test_redaction_docx.py tests\test_redaction_image.py -q

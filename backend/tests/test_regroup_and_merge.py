@@ -31,8 +31,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
 # `agent.orchestration` transitively imports the document extraction/redaction
-# tools, which import the native `fitz` (PyMuPDF) and `docx` (python-docx)
-# packages. Those are only installed in the deployed agent bundle, not in
+# tools, which import the PDF libraries (`pdfminer`, `pikepdf`, `pypdfium2`) and `docx`
+# (python-docx) packages. Those are only installed in the deployed agent bundle, not in
 # every local dev environment, and none of them are exercised by these tests
 # (only the pure-Python `_regroup_and_merge`/`merge_spans_within_unit` logic
 # is). Register lightweight stand-ins before importing orchestration so the
@@ -43,10 +43,12 @@ sys.path.insert(0, str(BACKEND_ROOT))
 # the module happens to have been imported already) makes this independent of
 # test collection order. With `setdefault`, running this module before
 # `test_extraction_docx.py` / `test_redaction_pdf.py` in the same process would
-# poison `sys.modules` with a MagicMock and break those real-`docx`/real-`fitz`
+# poison `sys.modules` with a MagicMock and break those real-`docx`/real-`pdfminer`/`pikepdf`/`pypdfium2`
 # tests.
 for _stubbed_module in (
-    "fitz",
+    "pdfminer",
+    "pikepdf",
+    "pypdfium2",
     "docx",
     "docx.enum",
     "docx.enum.text",

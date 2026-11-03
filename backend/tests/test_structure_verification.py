@@ -18,7 +18,6 @@ import io
 import sys
 from pathlib import Path
 
-import fitz  # PyMuPDF
 import pytest
 from docx import Document
 
@@ -32,6 +31,7 @@ from agent.tools.redaction_docx import redact_docx_document
 from agent.tools.redaction_pdf import redact_pdf_document
 from agent.tools.structure_verification import verify_structure
 from shared.models import RedactionRule
+from tests.pdf_fixtures import simple_multi_page_pdf
 
 
 def _build_docx_bytes(table_rows_cols=(2, 2)) -> bytes:
@@ -60,14 +60,7 @@ def _enabled_rule() -> RedactionRule:
 
 
 def _build_multi_page_pdf(page_texts) -> bytes:
-    document = fitz.open()
-    try:
-        for text in page_texts:
-            page = document.new_page()
-            page.insert_text((72, 72), text)
-        return document.tobytes()
-    finally:
-        document.close()
+    return simple_multi_page_pdf([[text] for text in page_texts])
 
 
 def test_docx_verify_structure_ok_when_redaction_preserves_table_shape():

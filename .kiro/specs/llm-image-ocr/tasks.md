@@ -183,7 +183,7 @@ in the tool cannot flip the Job to `failed`.
 - Bedrock is mocked with `unittest.mock`, not moto, following `tests/test_llm_pii_detect.py` and `tests/test_guardrails_pii_detect.py`. A fake `converse` client returns configurable responses and raises configurable errors carrying duck-typed `ClientError`-shaped `response` dicts so the imported `_is_retryable` classifies them as in production. Real model calls appear only in task 6.1.
 - `tests/test_guardrails_pii_detect.py` must keep passing **unmodified**: this feature imports `_is_retryable` from `guardrails_pii_detect` but does not touch it.
 - No new third-party dependencies: `boto3` and Hypothesis are already in use.
-- Backend tests run as **two separate processes** — the MagicMock `sys.modules` `fitz`/`docx` stubs registered by the first command must not contaminate the real-`fitz` PDF tests in the second:
+- Backend tests run as **two separate processes** — the MagicMock `sys.modules` PDF-library/`docx` stubs registered by the first command must not contaminate the real-PDF-library tests in the second:
   ```
   .venv\Scripts\python.exe -m pytest tests\test_ocr.py tests\test_orchestration.py tests\test_redaction_stack.py tests\test_guardrails_pii_detect.py tests\test_llm_pii_detect.py -q
   .venv\Scripts\python.exe -m pytest tests\test_extraction_pdf.py tests\test_redaction_pdf.py -q

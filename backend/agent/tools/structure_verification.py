@@ -62,9 +62,10 @@ Scope decision: PDF table-structure verification
 The `verify_structure` contract calls for matching table row/column counts
 unconditionally, but `extraction_pdf.py`
 does not currently produce any table-structure metadata
-for `.pdf` — and per that module's own documented zone-choice rationale,
-PyMuPDF's text-block extraction has no structural "table" concept at all:
-a PDF page is just a sequence of positioned text blocks, with no reliable,
+for `.pdf` — and the PDF text layer is obtained by walking the page content
+stream character by character (the glyph traversal in `pdf_glyphs`), which
+yields positioned characters and has no structural "table" concept at all:
+a PDF page is just a sequence of positioned glyphs, with no reliable,
 general way to detect table boundaries/rows/columns for arbitrary PDFs
 (unlike `.docx`, where `python-docx` exposes explicit `<w:tbl>` table XML
 elements with well-defined rows/columns). Building ad hoc PDF table

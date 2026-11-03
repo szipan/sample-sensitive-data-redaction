@@ -80,6 +80,11 @@ _MAGIC_BYTE_FORMATS = (
 # genuinely black (Solid_Redaction_Block).
 _MODES_NEEDING_RGB = ("P", "PA", "LA")
 
+# Single-channel modes: black is the integer 0, not an RGB tuple (ImageDraw
+# rejects a 3-tuple fill here). Kept in their own mode so a grayscale image
+# stays grayscale in the output.
+_SINGLE_CHANNEL_MODES = ("L", "1")
+
 
 def _read_box_padding() -> int:
     """Read `Box_Padding` from the environment at use-time, falling back to
@@ -291,6 +296,7 @@ def redact_image_bytes(
     try:
         if image.mode in _MODES_NEEDING_RGB:
             image = image.convert("RGB")
+        black = 0 if image.mode in _SINGLE_CHANNEL_MODES else (0, 0, 0)
         draw = ImageDraw.Draw(image)
         for left, top, right, bottom in rects:
             # ImageDraw fills the rectangle inclusive of the given corners;
@@ -303,7 +309,7 @@ def redact_image_bytes(
                     int(round(right)),
                     int(round(bottom)),
                 ],
-                fill=(0, 0, 0),
+                fill=black,
             )
     except Exception as exc:
         raise ImageRedactionError(

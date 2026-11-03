@@ -237,7 +237,7 @@ class TextPosition:
     page the text unit came from, when the source format has a fixed page
     concept. Populated by the `.pdf` extractor (`extract_pdf_content`)
     so the PDF redaction tool can look up which
-    `fitz.Page` a matched text unit lives on without re-parsing the
+    PDF page a matched text unit lives on without re-parsing the
     document. Left `None` for `.docx` extraction, which has no
     fixed page concept at the XML level (see `extraction_docx.py`'s
     `DocumentStructureMetadata.pageCount` docstring). Optional and
@@ -278,8 +278,9 @@ class OcrWord:
     given, so these are fractions of the page's width/height, not points.
     Every other `BoundingBox` here (`ExtractedTextUnit.boundingBox`,
     `ImageRegion.boundingBox`) is already in the source document's own
-    coordinate space and can be handed to PyMuPDF directly; this one cannot.
-    The PDF redactor scales it onto `page.rect` at redaction time
+    coordinate space and is already in Page_Coordinates (points, top-left origin, /Rotate
+    applied); this one is not.
+    The PDF redactor scales it onto the visible page rect (Page_Coordinates) at redaction time
     (`_normalized_bbox_to_page_rect`). The inconsistency is Textract's, not
     a choice — storing the raw response values keeps the conversion in one
     place instead of spreading a page-size dependency into the OCR tool —
@@ -304,11 +305,11 @@ class ExtractedTextUnit:
 
     `boundingBox` (additive extension): the text unit's bounding
     rectangle within its source page, in the same page-coordinate space
-    `fitz`/`PyMuPDF` uses (points, origin top-left). Populated by the
+    Page_Coordinates use (points, origin top-left,
+    /Rotate applied). Populated by the
     `.pdf` extractor (`extract_pdf_content`) alongside `position.pageIndex`
-    so the PDF redaction tool (`redact_pdf_document`) can call
-    PyMuPDF's `page.add_redact_annot(rect, ...)` for the correct page and
-    rectangle without needing to re-extract or re-search the document.
+    so the PDF redaction tool (`redact_pdf_document`) can redact the
+    correct page and rectangle without needing to re-extract or re-search the document.
     Left `None` for `.docx` extraction, which has no per-unit
     pixel/point rectangle concept. Optional and defaulted, so this is
     backward-compatible with every existing caller that constructs an
@@ -318,7 +319,7 @@ class ExtractedTextUnit:
     geometry of a unit whose text came from OCR rather than from the
     document's text layer, populated only by `ocr_pdf_pages` (which emits
     one `zone="ocr"` unit per PDF page). It exists because OCR text has no
-    per-character geometry the way `rawdict` extraction does, so the
+    per-character geometry the way text-layer extraction does, so the
     redactor cannot resolve an offset range to a rectangle by walking
     characters; the word list is the only bridge from an offset in
     `text` back to a place on the page. Left `None` for every text-layer
@@ -397,6 +398,10 @@ class ImageRegion:
     uses for targeted, per-region redaction. Optional and defaulted, so this
     is backward-compatible with every existing caller that constructs an
     `ImageRegion` without it.
+
+    For PDFs, `sourceLocation` is an Image_Handle of the form
+    `page:{pageIndex}:xref:{xref}`, and `boundingBox` is in Page_Coordinates
+    (points, top-left origin, /Rotate applied).
     """
 
     zone: Literal["image"]

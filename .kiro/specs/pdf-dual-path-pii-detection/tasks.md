@@ -19,9 +19,9 @@ Span merging (`merge_spans_within_unit`, `_regroup_and_merge`) is deliberately *
 
 - [x] 2. Implement the PDF OCR path tool
   - [x] 2.1 Create `backend/agent/tools/ocr_pdf.py` with `ocr_pdf_pages`
-    - Implement `ocr_pdf_pages(file_bytes) -> List[ExtractedTextUnit]`: one unit per page, in page order, `zone="ocr"`, `position.pageIndex == list index`, `boundingBox = page.rect`, `ocrWords` populated
+    - Implement `ocr_pdf_pages(file_bytes) -> List[ExtractedTextUnit]`: one unit per page, in page order, `zone="ocr"`, `position.pageIndex == list index`, `boundingBox = page rectangle`, `ocrWords` populated
     - Implement `_read_raster_dpi()` reading `PDF_OCR_DPI`, defaulting to 200 and clamping to `[72, 400]`
-    - Implement `_render_page_png(page, dpi)` via `page.get_pixmap(dpi=dpi).tobytes("png")`
+    - Implement `_render_page_png(page, dpi)` via `pypdfium2.PdfPage.render(scale=dpi/72)` encoded as PNG
     - Implement `_detect_with_retry` with 3 total attempts and exponential backoff for throttling/5xx, duck-typing the error shape as `guardrails_pii_detect._is_retryable` does
     - Implement the oversized-image fallback: re-render at 150 dpi once when the PNG exceeds Textract's synchronous input limit
     - Implement `_build_page_unit`: walk `LINE` blocks and their child `WORD` blocks, joining words with `" "` within a line and `"\n"` between lines, recording each word's offset range and normalized bounding box
@@ -47,7 +47,7 @@ Span merging (`merge_spans_within_unit`, `_regroup_and_merge`) is deliberately *
     - **Validates: Requirement 4.7**
 
   - [ ]* 2.6 Write unit tests for the OCR tool's call shape and edge branches
-    - Assert `get_pixmap` receives the resolved dpi for each page (_Requirements: 1.2_)
+    - Assert `PdfPage.render` receives the resolved dpi for each page (_Requirements: 1.2_)
     - Assert the oversized-image branch re-renders exactly once at 150 dpi (_Requirements: 3.2_)
     - Assert a page with no recognized words yields a unit with empty text rather than a failure
     - Mock Textract with `unittest.mock.patch`, not moto
@@ -82,7 +82,7 @@ Span merging (`merge_spans_within_unit`, `_regroup_and_merge`) is deliberately *
 
 - [x] 5. Resolve OCR spans to page rectangles in the PDF redactor
   - [x] 5.1 Add OCR geometry resolution helpers to `redaction_pdf.py`
-    - Implement `_normalized_bbox_to_page_rect(page_rect, box)` scaling normalized coordinates onto `page.rect`
+    - Implement `_normalized_bbox_to_page_rect(page_rect, box)` scaling normalized coordinates onto the page rectangle
     - Implement `_rects_for_ocr_span(page, unit, span)` returning the bounding box of every `OcrWord` whose offset range intersects the span's range
     - Raise `RedactionError` for an out-of-range `ocr:` index or a unit missing `pageIndex`/`ocrWords`, matching the existing text-layer precondition handling
     - _Requirements: 2.2, 2.3, 2.5_
@@ -98,9 +98,9 @@ Span merging (`merge_spans_within_unit`, `_regroup_and_merge`) is deliberately *
   - [x] 5.4 Dispatch on the `unitRef` prefix and return a provenance report
     - Add `PdfRedactionReport(textLayerRegions, ocrRegions, agreedRegions)` and `PdfRedactionResult(documentBytes, report)`
     - Add `redact_pdf_document_with_report(file_bytes, text_units, match_spans, ocr_text_units=None)`; keep `redact_pdf_document` as a bytes-returning wrapper so existing callers and tests are unaffected
-    - Collect rectangles per page tagged with their originating path; dispatch `text:` to the existing rawdict resolver and `ocr:` to `_rects_for_ocr_span`; keep skipping `image:` spans
+    - Collect rectangles per page tagged with their originating path; dispatch `text:` to the existing glyph resolver and `ocr:` to `_rects_for_ocr_span`; keep skipping `image:` spans
     - Compute `agreedRegions` as the number of OCR rectangles intersecting at least one text-layer rectangle on the same page
-    - Apply `add_redact_annot(rect, fill=(0,0,0))` for every rectangle from both paths, then `apply_redactions()` once per page
+    - Apply a `pdf_content_edit` glyph removal and black box for every rectangle from both paths, once per page
     - _Requirements: 2.1, 2.4, 2.6, 5.2, 5.3_
 
   - [ ]* 5.5 Write property test for redaction block application
@@ -120,7 +120,7 @@ Span merging (`merge_spans_within_unit`, `_regroup_and_merge`) is deliberately *
     - **Validates: Requirement 2.7**
 
   - [ ]* 5.9 Write unit tests for rotated pages and cross-path overlap
-    - Build a `/Rotate 90` page, resolve an OCR span, and assert the rectangle lands on the rendered word — verifying the `page.rect` rotation assumption rather than assuming it
+    - Build a `/Rotate 90` page, resolve an OCR span, and assert the rectangle lands on the rendered word — verifying the page-rectangle rotation assumption rather than assuming it
     - Build one `text:` span and one overlapping `ocr:` span and assert both rectangles are applied and no residual text remains
     - _Requirements: 2.3, 2.6_
 
@@ -249,7 +249,7 @@ Span merging (`merge_spans_within_unit`, `_regroup_and_merge`) is deliberately *
 - No changes to `verify_structure` are required. OCR text units never reach it — it re-extracts both documents itself and compares page count and order.
 - Every property test uses Hypothesis (Python) or fast-check (TypeScript), runs at least 100 iterations, and is tagged `Feature: pdf-dual-path-pii-detection, Property {number}: {property title}`.
 - Textract, Bedrock Runtime, DynamoDB, and S3 are faked or mocked in all property tests. Real service calls appear only in task 12.1.
-- No new third-party dependencies: PyMuPDF, boto3, Hypothesis, and fast-check are all already in use.
+- No new third-party dependencies: pdfminer.six, pikepdf, pypdfium2, boto3, Hypothesis, and fast-check are all already in use.
 
 ## Task Dependency Graph
 

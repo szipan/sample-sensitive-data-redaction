@@ -12,7 +12,7 @@ which is how a second divergent copy of the app wiring came to exist.
 Keep this file an exact copy of what the bundle root must contain: the sync
 script copies it byte-for-byte and does not rewrite anything.
 
-Heavy modules (boto3, fitz/PyMuPDF, python-docx) stay behind lazy imports
+Heavy modules (boto3, pypdfium2/pypdf, python-docx) stay behind lazy imports
 inside `invoke`, so container initialisation stays well inside AgentCore's
 30-second limit.
 """
@@ -106,7 +106,7 @@ async def invoke(payload, context=None):
             exc_info=True,
         )
 
-    from agent.runtime import (  # lazy: pulls boto3, fitz, docx
+    from agent.runtime import (  # lazy: pulls boto3, pdf libs, docx
         STATUS_ACCEPTED,
         InvalidInvocationPayloadError,
         extract_job_id,

@@ -214,7 +214,7 @@ Nothing in `shared/models.py` changes. Nothing in the eight Lambda handlers' log
   ```
   cd backend; .venv\Scripts\python.exe -m pytest tests -q
   ```
-  Current baseline is **258 passed**. The old two-command, `test_regroup_and_merge.py`-first instruction from earlier specs no longer applies: that file now attempts the real `fitz` / `docx` import and stubs only on `ImportError`, and `python-docx==1.1.2` is installed, so collection order no longer changes behaviour.
+  Current baseline is **258 passed**. The old two-command, `test_regroup_and_merge.py`-first instruction from earlier specs no longer applies: that file now attempts the real PDF-library / `docx` import and stubs only on `ImportError`, and `python-docx==1.1.2` is installed, so collection order no longer changes behaviour.
 - One known pre-existing flake: `test_property_7_provenance_merged_span_lists_every_contributing_name` has intermittently failed with Hypothesis `DeadlineExceeded` (285ms against a 200ms deadline) on a cold suite and passed on re-run. If a task run hits it, it is a timing artifact — the fix is `deadline=None` on that property, not a logic change.
 - **The one thing no coding task here can verify: that records actually arrive in the CloudWatch group.** That is a manual post-deploy check — run `sync_agent_entrypoint.py`, deploy, invoke a job, and confirm `/aws/bedrock-agentcore/runtimes/{id}-DEFAULT` holds events from `agent.*` loggers where it previously held only the 4 `bedrock_agentcore.app` events. Until that check is done, this feature is verified in the test suite and unverified in production.
 

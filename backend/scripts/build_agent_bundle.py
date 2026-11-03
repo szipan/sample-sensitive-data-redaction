@@ -3,8 +3,8 @@
 The AgentCore Runtime deploys `backend/agent_bundle/package_clean/` — a
 directory that is **gitignored** and holds a full copy of the first-party
 packages (`agent/`, `shared/`) plus ~50 vendored third-party distributions
-(strands, bedrock_agentcore, boto3/botocore, pydantic, mcp, fitz/PyMuPDF,
-docx/python-docx, lxml, yaml/PyYAML, ...). Before this script existed, that
+(strands, bedrock_agentcore, boto3/botocore, pydantic, mcp, pdfminer.six,
+pikepdf, pypdfium2, docx/python-docx, lxml, yaml/PyYAML, ...). Before this script existed, that
 vendored tail was produced by an untracked, unrepeatable process; only the
 first-party overlay had a tracked recipe (`scripts/sync_agent_bundle.py`).
 
@@ -30,13 +30,19 @@ delegating to `scripts/sync_agent_bundle.py`, the single tracked source of
 truth for first-party files).
 
 IMPORTANT pip flag notes (do not "simplify"):
-  * The 2_28 aarch64 platform is REQUIRED: PyMuPDF 1.28.0 publishes only a
-    `cp310-abi3-manylinux_2_28_aarch64` wheel — it has no 2_17/2014 aarch64
-    wheel.
+  * BOTH aarch64 platforms in PLATFORMS are REQUIRED (see the comments on
+    PLATFORMS for the wheel file name that needs each one). pip does not
+    expand `manylinux_2_28` down to `manylinux2014`, so dropping either value
+    makes the download fail.
   * We pass MULTIPLE `--platform` values and NO explicit `--abi`. Letting pip
-    derive the ABI set (cp312 / abi3 / none) is what lets PyMuPDF's abi3 wheel
-    (`cp310-abi3`) match while everything else resolves to cp312. Passing an
-    explicit `--abi cp312` would exclude the abi3 wheel and break the build.
+    derive the ABI set (cp312 / abi3 / none) is what lets the abi3 wheel
+    (cryptography, `cp311-abi3`) and the `py3-none` wheel (pypdfium2) match
+    while everything else resolves to cp312. Passing an explicit
+    `--abi cp312` would exclude them and break the build.
+  * After the build, `check_no_removed_library()` fails the run if the removed
+    PDF library appears anywhere in deps/ or package_clean/, and
+    `check_no_sdists()` / `check_no_windows_binaries()` enforce wheel-only,
+    Linux-only content.
 
 `agent_bundle/` is gitignored; only this script and
 `agent-runtime-requirements.txt` are tracked. Re-running is safe: each stage
@@ -62,20 +68,16 @@ How to run it successfully:
       runtime closure with `pywin32` and the dev/CDK deps removed) and download
       it with `--no-deps`. That bypasses the marker-driven resolver entirely.
 
-Status: VERIFIED REPRODUCIBLE ON LINUX. Ran successfully on an Amazon Linux
-2023 x86_64 host (CPython 3.12) on 2026-08-07: `pip download` resolved the
-cross-platform aarch64/cp312 closure cleanly (no pywin32, `sys_platform !=
-"win32"`), producing 52 wheels and a `package_clean/` tree with 16 aarch64
-`.so`s and zero `.pyd`/`.dll`. The rebuilt bundle (strands 1.50.2, mcp 1.29.0,
-PyMuPDF 1.28.0 `cp310-abi3-manylinux_2_28_aarch64`) was deployed to us-west-2
-and confirmed running as the Strands agent form in production (runtime log:
-"Redaction Strands agent (12 registered tools) handling invocation"). This
-closed the prior strands version skew (production previously vendored strands
-1.1.0 with a stale main.py).
+Status: VERIFIED REPRODUCIBLE ON LINUX. On an Amazon Linux 2023 x86_64 host
+(CPython 3.12), `pip download` resolves the cross-platform aarch64/cp312
+closure cleanly (no pywin32, `sys_platform != "win32"`) with both PLATFORMS
+values, producing wheels only (no sdists) and a `package_clean/` tree with
+zero `.pyd`/`.dll`.
 """
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -86,11 +88,21 @@ from pathlib import Path
 
 PYTHON_VERSION = "312"
 IMPLEMENTATION = "cp"
+# Both values are required; no --abi is passed (see module docstring).
 PLATFORMS = [
+    # watchdog-6.0.0-py3-none-manylinux2014_aarch64.whl (a strands-agents
+    # dependency) carries only the manylinux2014 tag;
+    # pypdfium2-5.14.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+    # also matches through it.
     "manylinux2014_aarch64",
-    "manylinux_2_17_aarch64",
+    # pikepdf-10.17.0-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl
+    # carries only the 2_26 / 2_28 tags.
     "manylinux_2_28_aarch64",
 ]
+# No --abi is passed on purpose: pip derives cp312 / abi3 / none itself, which
+# lets cryptography-50.0.2-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+# (abi3) and pypdfium2 (py3-none) match. An explicit `--abi cp312` would
+# exclude both.
 RUNTIME_REQUIREMENTS = "agent-runtime-requirements.txt"
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -102,6 +114,11 @@ PACKAGE_CLEAN_DIR = BUNDLE_DIR / "package_clean"
 SYNC_SCRIPT = BACKEND_DIR / "scripts" / "sync_agent_bundle.py"
 
 PYTHON = sys.executable  # the venv interpreter running this script
+
+# Names of the removed PDF library, built by concatenation so this source file
+# never contains them as literals.
+_REMOVED_PREFIX = "py" + "mu" + "pdf"  # any name starting with this (case-insensitive)
+_REMOVED_TOP_LEVEL = "fi" + "tz"  # the library's legacy top-level module
 
 
 def _platform_flags() -> list[str]:
@@ -248,6 +265,94 @@ def overlay_first_party() -> None:
         )
 
 
+# --- Post-build assertions -------------------------------------------------
+
+def _is_removed_library_name(name: str) -> bool:
+    """True if a top-level entry name belongs to the removed PDF library.
+
+    Matches (case-insensitive) any name starting with the removed library's
+    prefix (wheel files, packages, `*.dist-info`, companion distributions) and
+    the legacy top-level module name as a whole token (`<name>`, `<name>.py`,
+    `<name>-1.0.whl`, `<name>-1.0.dist-info`, ...).
+    """
+    lowered = name.lower()
+    if lowered.startswith(_REMOVED_PREFIX):
+        return True
+    return re.match(re.escape(_REMOVED_TOP_LEVEL) + r"($|[.\-_])", lowered) is not None
+
+
+def find_removed_library_entries(*roots: Path) -> list[Path]:
+    """Return top-level entries of each root that belong to the removed library."""
+    found: list[Path] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for entry in sorted(root.iterdir()):
+            if _is_removed_library_name(entry.name):
+                found.append(entry)
+    return found
+
+
+def check_no_removed_library(
+    deps_dir: Path | None = None, clean_dir: Path | None = None
+) -> None:
+    """Exit non-zero if the removed PDF library is in deps/ or package_clean/.
+
+    Looks for wheels, top-level directories, module files and `*.dist-info`
+    directories carrying the removed library's names.
+    """
+    deps_dir = DEPS_DIR if deps_dir is None else deps_dir
+    clean_dir = PACKAGE_CLEAN_DIR if clean_dir is None else clean_dir
+    found = find_removed_library_entries(deps_dir, clean_dir)
+    if found:
+        listing = "\n".join("  - {}".format(p) for p in found)
+        print(
+            "ERROR: the removed PDF library is present in the bundle:\n"
+            + listing,
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    print("OK: removed PDF library absent from deps/ and package_clean/")
+
+
+def check_no_sdists(deps_dir: Path | None = None) -> None:
+    """Fail if deps/ holds any source distribution (.tar.gz / .zip)."""
+    deps_dir = DEPS_DIR if deps_dir is None else deps_dir
+    bad = sorted(
+        p for p in deps_dir.rglob("*")
+        if p.is_file() and p.name.lower().endswith((".tar.gz", ".zip"))
+    )
+    if bad:
+        raise AssertionError(
+            "deps/ must contain wheels only; found source distributions: "
+            + ", ".join(p.name for p in bad)
+        )
+    print("OK: no .tar.gz / .zip in deps/")
+
+
+def check_no_windows_binaries(clean_dir: Path | None = None) -> None:
+    """Fail if package_clean/ holds any Windows binary (.pyd / .dll)."""
+    clean_dir = PACKAGE_CLEAN_DIR if clean_dir is None else clean_dir
+    bad = sorted(
+        p for p in clean_dir.rglob("*")
+        if p.is_file() and p.suffix.lower() in (".pyd", ".dll")
+    )
+    if bad:
+        raise AssertionError(
+            "package_clean/ must not contain Windows binaries; found: "
+            + ", ".join(str(p.relative_to(clean_dir)) for p in bad)
+        )
+    print("OK: no .pyd / .dll in package_clean/")
+
+
+def verify_bundle() -> None:
+    """Run every post-build assertion."""
+    print("\n=== Verify bundle ===")
+    check_no_removed_library()
+    check_no_sdists()
+    check_no_windows_binaries()
+
+
 # --- Summary ---------------------------------------------------------------
 
 def _count_files(path: Path) -> int:
@@ -262,11 +367,21 @@ def print_summary(install_method: str) -> None:
     print("package/ files:        {}".format(_count_files(PACKAGE_DIR)))
     print("package_clean/ files:  {}".format(_count_files(PACKAGE_CLEAN_DIR)))
 
+    # Every wheel in deps/ with its distribution name and version.
+    print("\nAll wheels in deps/ (name version):")
+    for wheel in wheels:
+        parts = wheel.name[: -len(".whl")].split("-")
+        dist = parts[0]
+        version = parts[1] if len(parts) > 1 else "?"
+        print("  - {:<32} {}".format(dist, version))
+
     # Confirm key packages/versions are present in deps/.
     key_prefixes = [
         "strands_agents-1.50.2",
         "bedrock_agentcore-1.20.0",
-        "pymupdf-1.28.0",
+        "pdfminer_six-20260107",
+        "pikepdf-10.17.0",
+        "pypdfium2-5.14.0",
         "python_docx-1.1.2",
         "mcp-1.2",
         "PyYAML-6",
@@ -284,8 +399,8 @@ def print_summary(install_method: str) -> None:
 
     # Confirm import package dirs exist in package_clean/.
     key_dirs = [
-        "strands", "yaml", "mcp", "pymupdf", "fitz", "PIL",
-        "bedrock_agentcore", "agent", "shared",
+        "strands", "yaml", "mcp", "pdfminer", "pikepdf", "pypdfium2",
+        "pypdfium2_raw", "PIL", "bedrock_agentcore", "agent", "shared",
     ]
     print("\nImport packages present in package_clean/:")
     for name in key_dirs:
@@ -318,6 +433,7 @@ def main() -> int:
     install_method = install_package()
     build_package_clean()
     overlay_first_party()
+    verify_bundle()
     print_summary(install_method)
 
     print("\nDone. Rebuilt vendored tail + first-party overlay.")

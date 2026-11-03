@@ -1,7 +1,7 @@
 """`.docx` implementation of the `extract_document_content` Agent tool
 
 Scope note: this module implements the `.docx` extraction logic
-ONLY. The `.pdf` equivalent is implemented separately (using `PyMuPDF`) in a
+ONLY. The `.pdf` equivalent is implemented separately (using pdfminer.six for text, pypdfium2 for rasterization and pikepdf for content-stream editing) in a
 sibling module. The extension-dispatching wrapper lives in
 `orchestration.py`:
 

@@ -102,7 +102,7 @@ enumerated at the end for the user to resolve before design:
 2. **`.docx` vs `.pdf` scope** — implement both now, or `.docx` first with
    `.pdf` in a later phase.
 3. **Image-manipulation dependency** — add Pillow as a real backend dependency,
-   or use PyMuPDF (`fitz`, already a dependency) for image decode/draw/encode.
+   or use the PDF stack already in the backend (pikepdf / pypdfium2) for image decode/draw/encode.
 4. **Extraction prerequisites** — the current extractors do not yet supply
    everything this feature needs (see "Assumptions and Dependencies"); the
    scope of the extraction changes needs confirmation.
@@ -167,7 +167,7 @@ The detailed rationale for each is retained below for the record.
   — applied whenever targeted Localization cannot be trusted for an
   Image_Region that has at least one Image_Span.
 - **Image_Redaction_Backend**: The library used to decode an image, draw filled
-  black rectangles on it, and re-encode it — either PyMuPDF (`fitz`) or Pillow,
+  black rectangles on it, and re-encode it — either the existing PDF stack (pikepdf / pypdfium2) or Pillow,
   per the open dependency decision.
 - **Solid_Redaction_Block**: A filled, opaque black rectangle drawn on the
   image, and (for consistency with the existing redactors) rendered so that
@@ -518,14 +518,14 @@ Recommendation: needs user input. If the motivating leak (driving-license image)
 is `.pdf`, B2 would leave the demonstrated leak open, arguing for **B1** — but
 B1 is more design work. Flagging for the user to choose.
 
-### Decision C: Image-manipulation dependency — Pillow vs PyMuPDF (`fitz`)
+### Decision C: Image-manipulation dependency — Pillow vs the existing PDF stack (pikepdf / pypdfium2)
 
 Drawing black rectangles on a decoded image and re-encoding it needs an
 imaging library.
 
-- **Option C1 — Use PyMuPDF (`fitz`), already a backend dependency.** No new
-  dependency. `fitz` can decode a pixmap, and for `.pdf` it can redraw/replace
-  images natively; drawing arbitrary filled rectangles on a raster for
+- **Option C1 — Use the existing PDF stack (pikepdf / pypdfium2), already backend dependencies.** No new
+  dependency. pypdfium2 can render a page bitmap, and for `.pdf` `pdf_images.write_back_image` can replace
+  image streams; drawing arbitrary filled rectangles on a raster for
   re-embedding is more awkward than Pillow but feasible.
 - **Option C2 — Add Pillow as a real backend dependency.** Pillow
   (`ImageDraw.rectangle`) is the natural fit for "decode → draw filled boxes →
@@ -536,7 +536,7 @@ imaging library.
 Recommendation: needs user input, and it interacts with Decision B. For a
 raster-drawing task Pillow is the ergonomic choice (**C2**); if avoiding a new
 dependency is a priority, **C1** is workable, especially if scope is `.pdf`-only
-where `fitz` already owns the document.
+where pikepdf already owns the document.
 
 ### Decision D: Extraction prerequisites
 

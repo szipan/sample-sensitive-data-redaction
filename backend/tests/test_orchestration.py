@@ -1050,7 +1050,7 @@ def test_property4_no_span_image_is_forwarded_byte_identical(
     the redactor, and only when an `image:` span references it). The
     redactor-level pixel guarantee — that a no-span region's OUTPUT bytes
     equal its source bytes — is covered by the redactor tests in the real-
-    `fitz`/`docx` process group.
+    PDF/`docx` process group.
     """
     file_name = "source.docx" if extension == ".docx" else "source.pdf"
     job = _make_job(extension=extension, file_name=file_name)

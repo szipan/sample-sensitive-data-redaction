@@ -29,7 +29,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email import message_from_bytes
 from typing import Any, Dict, Optional, Tuple
 
@@ -243,8 +243,20 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _expires_at_epoch() -> int:
+    """Epoch seconds at which DynamoDB TTL may delete a job record; matches
+    the S3 lifecycle retention (`JOB_RETENTION_DAYS`, default 1)."""
+    try:
+        days = int(os.environ.get("JOB_RETENTION_DAYS", "1"))
+    except ValueError:
+        days = 1
+    return int((datetime.now(timezone.utc) + timedelta(days=days)).timestamp())
+
+
 def _put_job_item(job_item: Dict[str, Any]) -> None:
-    _get_jobs_table().put_item(Item=job_item)
+    item = dict(job_item)
+    item.setdefault("expiresAt", _expires_at_epoch())
+    _get_jobs_table().put_item(Item=item)
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

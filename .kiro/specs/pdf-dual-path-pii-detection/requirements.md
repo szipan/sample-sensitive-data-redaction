@@ -2,7 +2,7 @@
 
 ## Introduction
 
-PDF PII detection in this POC currently trusts a single source of truth: the PDF's text layer, read via `page.get_text("rawdict")`. That text layer is not trustworthy. Both test PDFs in this repository carry a broken font ToUnicode CMap, so ligature glyphs decode to unrelated codepoints — the page renders `Patti`, `Martin`, `Christina`, `https://`, `routing`, while the text layer reads `Pa#`, `Mar&n`, `Chris&na`, `hbps://`, `rou:ng`.
+PDF PII detection in this POC currently trusts a single source of truth: the PDF's text layer, read via `pdf_glyphs.collect_page_glyphs`. That text layer is not trustworthy. Both test PDFs in this repository carry a broken font ToUnicode CMap, so ligature glyphs decode to unrelated codepoints — the page renders `Patti`, `Martin`, `Christina`, `https://`, `routing`, while the text layer reads `Pa#`, `Mar&n`, `Chris&na`, `hbps://`, `rou:ng`.
 
 Measured end-to-end through the deployed pipeline on `Patti.pdf` (visible content `Patti、Martin、Christina`):
 
@@ -13,7 +13,7 @@ Measured end-to-end through the deployed pipeline on `Patti.pdf` (visible conten
 
 So PII leaks while the job reports success, and nothing in the job record or in `verify_structure` distinguishes "no PII present" from "PII present but undecodable". For a listed-enterprise compliance use case that is the wrong risk profile.
 
-The redaction *geometry* is not the defect here — extraction and redaction were just aligned onto a shared `rawdict` traversal (commit `c010490`) so offsets map 1:1 onto character rectangles. This feature addresses the fact that the text layer's *content* cannot be trusted.
+The redaction *geometry* is not the defect here — extraction and redaction were just aligned onto a shared glyph traversal (commit `c010490`) so offsets map 1:1 onto character rectangles. This feature addresses the fact that the text layer's *content* cannot be trusted.
 
 This feature introduces a second, independent detection path for PDFs: rasterize each page and run Amazon Textract `DetectDocumentText` over it, then detect PII in the OCR text with the same rules and Guardrails, and union both paths' results before redaction. The two paths have complementary failure modes — a ToUnicode defect breaks the text layer but not OCR; an OCR misread breaks OCR but not a clean text layer; a scanned page has no text layer at all. To leak a PII value, both paths must fail on that same value.
 
@@ -24,7 +24,7 @@ The feature also makes the outcome auditable: per-source detection counts and a 
 ## Glossary
 
 - **Redaction_Agent**: The AgentCore-hosted deterministic pipeline (`backend/agent/orchestration.py`, `handle_job`) that extracts, matches, redacts, verifies, stores, and updates the Redaction Job.
-- **Text_Layer_Path**: The existing PDF detection path — `page.get_text("rawdict")` produces one `ExtractedTextUnit` per page, whose character offsets map 1:1 onto on-page character rectangles.
+- **Text_Layer_Path**: The existing PDF detection path — `pdf_glyphs.collect_page_glyphs` produces one `ExtractedTextUnit` per page, whose character offsets map 1:1 onto on-page character rectangles.
 - **OCR_Path**: The new PDF detection path — each page is rasterized to an image, Textract_DetectDocumentText recognizes its text, and one OCR_Text_Unit per page is produced with Word_Block geometry.
 - **OCR_Text_Unit**: An `ExtractedTextUnit` produced by the OCR_Path for one page, carrying the OCR-recognized page text plus the Word_Block list that locates each recognized word.
 - **Word_Block**: A single Textract `WORD` block, comprising the recognized word text, its character offset range within the OCR_Text_Unit's text, and its normalized (0–1) bounding box relative to the rasterized page image.
@@ -32,7 +32,7 @@ The feature also makes the outcome auditable: per-source detection counts and a 
 - **Unit_Ref**: The namespaced `MatchSpan.unitRef` string identifying which unit a span's offsets belong to — `"text:{index}"` for Text_Layer_Path units, `"image:{index}"` for embedded-image regions, and `"ocr:{pageIndex}"` for OCR_Text_Units.
 - **Span_Merging_Logic**: `merge_spans_within_unit` (`backend/agent/tools/matching.py`) together with `_regroup_and_merge` (`backend/agent/orchestration.py`), which group spans by Unit_Ref before merging.
 - **PDF_Redactor**: `redact_pdf_document` (`backend/agent/tools/redaction_pdf.py`), which resolves each MatchSpan to on-page rectangles and permanently erases them.
-- **Solid_Redaction_Block**: An opaque black rectangle applied via `page.add_redact_annot(rect, fill=(0,0,0))` followed by `page.apply_redactions()`.
+- **Solid_Redaction_Block**: An opaque black rectangle applied via `pdf_content_edit` (content-stream glyph removal plus a black fill box).
 - **Structure_Verification_Tool**: `verify_structure` (`backend/agent/tools/structure_verification.py`), which compares source and redacted documents for page count, page order, and (for `.docx`) table structure.
 - **Detection_Summary**: A record attached to a Redaction Job describing how many redacted regions came from each detection path, how many regions the two paths agreed on, and the per-page Text_Layer_Health_Signal.
 - **Agreed_Region**: A pair of resolved rectangles on the same page, one from the Text_Layer_Path and one from the OCR_Path, whose areas intersect.
@@ -67,7 +67,7 @@ The feature also makes the outcome auditable: per-source detection counts and a 
 
 #### Acceptance Criteria
 
-1. WHEN the PDF_Redactor receives a MatchSpan whose Unit_Ref begins with `text:`, THE PDF_Redactor SHALL resolve that span to rectangles from the page's `rawdict` character rectangles.
+1. WHEN the PDF_Redactor receives a MatchSpan whose Unit_Ref begins with `text:`, THE PDF_Redactor SHALL resolve that span to rectangles from the page's glyph character rectangles.
 2. WHEN the PDF_Redactor receives a MatchSpan whose Unit_Ref begins with `ocr:`, THE PDF_Redactor SHALL resolve that span to the bounding boxes of every Word_Block whose character offset range intersects the span's offset range.
 3. WHEN the PDF_Redactor converts a Word_Block's normalized bounding box to PDF user space, THE PDF_Redactor SHALL map it onto the page rectangle by scaling each normalized coordinate by the corresponding page dimension and offsetting by the page rectangle's origin.
 4. THE PDF_Redactor SHALL apply a Solid_Redaction_Block to every rectangle resolved from the Text_Layer_Path and to every rectangle resolved from the OCR_Path.
@@ -97,7 +97,7 @@ The feature also makes the outcome auditable: per-source detection counts and a 
 
 1. THE Span_Merging_Logic SHALL merge a MatchSpan only with MatchSpans carrying an identical Unit_Ref.
 2. WHEN the Span_Merging_Logic receives a collection containing no `ocr:`-referenced MatchSpans, THE Span_Merging_Logic SHALL produce the same result it produced before this feature existed.
-3. THE Text_Layer_Path SHALL record each character exactly as `page.get_text("rawdict")` reports it, so that offset `i` of a page's text unit remains the character at index `i` of the same page's `rawdict` character traversal.
+3. THE Text_Layer_Path SHALL record each character exactly as `pdf_glyphs.collect_page_glyphs` reports it, so that offset `i` of a page's text unit remains the character at index `i` of the same page's glyph traversal.
 4. WHEN the Structure_Verification_Tool compares a source PDF against a Redacted Document produced with OCR_Path redactions applied, THE Structure_Verification_Tool SHALL report `ok` for a Redacted Document whose page count and page order match the source.
 5. THE Redaction_Agent SHALL continue to invoke embedded-image OCR for `ImageRegion`s of both `.docx` and `.pdf` documents, using the `image:{index}` Unit_Ref namespace.
 6. THE CDK_Stack SHALL grant the AgentCore Runtime execution role permission to call `textract:DetectDocumentText`.

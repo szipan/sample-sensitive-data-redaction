@@ -9,8 +9,8 @@ Contract of `redact_document` (`.docx` half):
             cleared, and every other node is preserved as is
 
 Scope note: this module implements the `.docx` redaction logic
-ONLY. The `.pdf` equivalent (using `PyMuPDF`'s
-`add_redact_annot`/`apply_redactions`) is implemented separately in a
+ONLY. The `.pdf` equivalent (using content-stream
+editing via pikepdf, with pdfminer.six text extraction and pypdfium2 rasterization) is implemented separately in a
 sibling module. `verify_structure` is also out of scope here.
 
 --------------------------------------------------------------------------

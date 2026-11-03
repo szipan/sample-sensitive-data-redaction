@@ -254,7 +254,7 @@ The riskiest task is 1.4 — rewiring a shipped, tested file. Its acceptance bar
 - No new third-party dependencies: `boto3`, Hypothesis, and fast-check are all already in use.
 - Every property test uses Hypothesis (Python) or fast-check (TypeScript), runs at least 100 iterations, and is tagged `Feature: llm-cjk-pii-recall, Property {number}: {property title}`.
 - Bedrock is mocked with `unittest.mock`, not moto, following `tests/test_guardrails_pii_detect.py`. Real model calls appear only in task 10.1.
-- Backend tests run as two separate processes, with `tests\test_regroup_and_merge.py` listed first in the first command because it registers `fitz`/`docx` MagicMock `sys.modules` stubs while the PDF tests need real `fitz`:
+- Backend tests run as two separate processes, with `tests\test_regroup_and_merge.py` listed first in the first command because it registers PDF-library/`docx` MagicMock `sys.modules` stubs while the PDF tests need the real PDF libraries:
   ```
   .venv\Scripts\python.exe -m pytest tests\test_regroup_and_merge.py tests\test_orchestration.py tests\test_matching.py tests\test_guardrails_pii_detect.py tests\test_llm_pii_detect.py tests\test_pii_offsets.py -q
   .venv\Scripts\python.exe -m pytest tests\test_extraction_pdf.py tests\test_redaction_pdf.py -q

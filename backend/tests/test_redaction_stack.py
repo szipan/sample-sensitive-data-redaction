@@ -386,3 +386,48 @@ def test_runtime_env_image_ocr_value_equals_stack_constant(template_json):
     assert _ocr_is_pinned_model_id(env_vars.get("IMAGE_OCR_MODEL_ID")) is True
     # The grant's inference-profile ARN embeds the same pinned id.
     assert EXPECTED_IMAGE_OCR_INFERENCE_PROFILE_ARN.endswith(IMAGE_OCR_MODEL_ID)
+
+
+# ---------------------------------------------------------------------------
+# Data retention: documents and job records must not live forever.
+# ---------------------------------------------------------------------------
+def test_document_buckets_expire_objects(template_json):
+    from infra.redaction_stack import DOCUMENT_RETENTION_DAYS
+
+    buckets = [
+        r for r in template_json["Resources"].values()
+        if r["Type"] == "AWS::S3::Bucket"
+        and "LifecycleConfiguration" in r.get("Properties", {})
+    ]
+    assert len(buckets) == 2
+    for bucket in buckets:
+        rules = bucket["Properties"]["LifecycleConfiguration"]["Rules"]
+        expire = [r for r in rules if r.get("Status") == "Enabled"
+                  and r.get("ExpirationInDays") == DOCUMENT_RETENTION_DAYS]
+        assert expire
+
+
+def test_jobs_table_has_ttl(template_json):
+    tables = [
+        r for r in template_json["Resources"].values()
+        if r["Type"] == "AWS::DynamoDB::Table"
+        and r["Properties"].get("TableName") == "RedactionJobs"
+    ]
+    assert tables[0]["Properties"]["TimeToLiveSpecification"] == {
+        "AttributeName": "expiresAt", "Enabled": True,
+    }
+
+
+def test_agent_may_delete_only_source_documents(template_json):
+    import json as _json
+
+    policies = [
+        r for r in template_json["Resources"].values()
+        if r["Type"] == "AWS::IAM::Role"
+        and "AgentRedactionPolicy" in r["Properties"].get("Policies", [{}])[0].get("PolicyName", "")
+    ]
+    statements = policies[0]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
+    delete = [s for s in statements if "s3:DeleteObject" in _json.dumps(s["Action"])]
+    assert len(delete) == 1
+    assert "SourceDocumentsBucket" in _json.dumps(delete[0]["Resource"])
+    assert "OutputDocumentsBucket" not in _json.dumps(delete[0]["Resource"])

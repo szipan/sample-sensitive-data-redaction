@@ -155,7 +155,7 @@ design.md 中定义的 21 条 Correctness Properties 全部映射为标记 `*` �
 - [x] 13. 实现 Agent 文档提取工具
   - [x] 13.1 实现 `.docx` 的 `extract_document_content`（`python-docx` 遍历段落、表格、页眉页脚），产出 `ExtractedTextUnit[]` 与占位 `ImageRegion[]`
     - _Requirements: 4.6, 4.7_
-  - [x] 13.2 实现 `.pdf` 的 `extract_document_content`（`PyMuPDF` 按页提取文本块与图像位置）
+  - [x] 13.2 实现 `.pdf` 的 `extract_document_content`（`pdf_glyphs.collect_page_glyphs` 按页提取字形文本，`pdf_images` 提取图像位置）
     - _Requirements: 4.6, 4.7_
   - [ ]* 13.3 使用代表性 `.docx`/`.pdf` 样例（正文/表格/页眉页脚文本、嵌入图片）编写提取逻辑单元测试
     - _Requirements: 4.6, 4.7_
@@ -183,7 +183,7 @@ design.md 中定义的 21 条 Correctness Properties 全部映射为标记 `*` �
 - [x] 16. 实现 Agent 遮盖与结构校验工具
   - [x] 16.1 实现 `.docx` 的 `redact_document`：仅修改包含匹配的 run/单元格节点，用实心图形覆盖并清空匹配文本，其余 XML 节点原样保留
     - _Requirements: 3.2, 3.4, 4.3, 4.4_
-  - [x] 16.2 实现 `.pdf` 的 `redact_document`：使用 `add_redact_annot`/`apply_redactions` 永久擦除并填充黑色
+  - [x] 16.2 实现 `.pdf` 的 `redact_document`：使用 `pdf_content_edit` 移除命中字形并绘制黑色实心框，永久擦除
     - _Requirements: 3.2, 3.4, 4.3, 4.4_
   - [ ]* 16.3 编写「遮盖匹配内容且保留其余全部内容」的属性测试
     - **Property 12: Redaction blocks matches and preserves everything else**

@@ -174,7 +174,7 @@ app = BedrockAgentCoreApp()
 
 @app.entrypoint
 async def invoke(payload, context=None):
-    from agent.runtime import process_invocation      # lazy: pulls boto3, fitz, docx
+    from agent.runtime import process_invocation      # lazy: pulls boto3, pdfminer.six/pikepdf/pypdfium2, docx
     return process_invocation(payload)
 
 

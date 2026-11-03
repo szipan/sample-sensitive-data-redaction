@@ -27,7 +27,7 @@ frontend/                   React 前端
 
 | 项目 | 要求 |
 | --- | --- |
-| 操作系统 | **Linux 或 macOS**。构建脚本在 Windows 上跑不通(见"常见问题") |
+| 操作系统 | **Linux**(bundle 构建必须在 Linux 主机运行)。Windows 上跑不通(见"常见问题") |
 | Python | 3.12(`python3.12` 在 PATH 中) |
 | Node.js | `^22.22.2` 或 `^24.15.0`(见 `frontend/package.json` 的 engines) |
 | AWS CDK CLI | `npm install -g aws-cdk` |
@@ -56,7 +56,22 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` 含 CDK 依赖(`aws-cdk-lib`、`constructs`),以及本地跑测试需要的 `python-docx`、`PyMuPDF`、`strands-agents`、`bedrock-agentcore` 等。
+`requirements.txt` 含 CDK 依赖(`aws-cdk-lib`、`constructs`),以及 `python-docx`、`strands-agents`、`bedrock-agentcore` 和下面列出的 PDF 依赖等。
+
+#### PDF 依赖与许可证
+
+版本以 `backend/requirements.txt` / `requirements-dev.txt` / `agent-runtime-requirements.txt` 为准。完整的第三方许可证文本见仓库根目录的 `THIRD-PARTY-LICENSES`。
+
+| 包 | 精确版本 | 许可证 | 用途 |
+| --- | --- | --- | --- |
+| `pdfminer.six` | 20260107 | MIT | PDF 文本与字符坐标提取 |
+| `pikepdf` | 10.17.0 | MPL-2.0(wheel 内捆绑 qpdf,Apache-2.0 等) | PDF 结构读写与内容流脱敏 |
+| `pypdfium2` | 5.14.0 | BSD-3-Clause(PDFium 及其捆绑组件的许可证见 `THIRD-PARTY-LICENSES`) | PDF 页面渲染 |
+| `Pillow` | 11.0.0 | MIT-CMU(HPND) | 图片解码、遮盖与重新编码 |
+| `pypdf` | 6.21.4 | BSD-3-Clause | 仅开发/测试使用,不进入 bundle |
+| `hypothesis` | 6.112.1 | MPL-2.0 | 仅开发/测试使用,不进入 bundle |
+
+关于 MPL-2.0: `pikepdf` 与 `hypothesis` 均以**未修改**的形式使用(只从 PyPI 安装,不改动其源码,也不重新分发修改版),MPL-2.0 的文件级 copyleft 义务不会扩散到本项目代码。如果许可证扫描工具把 MPL-2.0 标记为弱 copyleft,可依据公司的弱 copyleft 分发政策自行关闭对应工单。
 
 ### 2. 跑测试(可选,建议)
 
@@ -71,7 +86,7 @@ python3.12 -m venv .venv
 AgentCore Runtime 部署的是 `backend/agent_bundle/package_clean/`。它由第三方依赖(Linux ARM64 / CPython 3.12 的 wheel)加上本仓库的 `agent/`、`shared/`、根 `main.py` 组成。**这个目录不入库,每次部署前、以及每次修改 `agent/`、`shared/` 下任何代码后,都必须重新构建:**
 
 ```bash
-.venv/bin/python scripts/build_agent_bundle.py
+python scripts/build_agent_bundle.py   # 在 backend/ 目录,使用 .venv 的 python
 ```
 
 脚本分三步(幂等,可重复运行): 下载 aarch64 wheel → 安装到 `package/` → 去掉 `*.dist-info`/`bin`/`__pycache__` 得到 `package_clean/`,最后用 `scripts/sync_agent_bundle.py` 覆盖 first-party 代码。运行时依赖在 `agent-runtime-requirements.txt`(**不要**把 `aws-cdk-lib` 放进去)。
@@ -84,7 +99,7 @@ find agent_bundle/package_clean \( -name '*.pyd' -o -name '*.dll' \) | wc -l   #
 cmp agent_bundle/package_clean/main.py agent/main.py && echo OK                # 应为 OK
 ```
 
-> 不要手动"简化"脚本里的 pip 参数: 必须用 `--platform manylinux_2_28_aarch64`,且**不能**传显式 `--abi`,否则 PyMuPDF 的 abi3 wheel 匹配不上。
+> 构建目标是 Linux ARM64 / CPython 3.12,脚本必须在 **Linux 主机**上运行(Windows 不支持,macOS 请改用 Linux 主机或容器)。脚本使用平台标签 `manylinux2014_aarch64` 和 `manylinux_2_28_aarch64`,**不传** `--abi`: `cryptography` 的 abi3 wheel 与 `pypdfium2` 的 `py3-none` wheel 需要靠平台标签匹配,显式指定 `--abi` 会让它们匹配不上。不要手动"简化"脚本里的 pip 参数。
 
 ### 4. 部署
 
@@ -224,7 +239,7 @@ npm test
 
 ## 常见问题
 
-**构建 bundle 时报 `ResolutionImpossible` / pywin32**: 你在 Windows 上。`strands-agents` → `mcp` 依赖 `pywin32; sys_platform == "win32"`,pip 在 Windows 上解析时会去找没有 aarch64 wheel 的 pywin32。请换到 Linux/macOS(或 WSL)构建。
+**构建 bundle 时报 `ResolutionImpossible` / pywin32**: 你在 Windows 上。`strands-agents` → `mcp` 依赖 `pywin32; sys_platform == "win32"`,pip 在 Windows 上解析时会去找没有 aarch64 wheel 的 pywin32。请换到 Linux 主机(或 WSL)构建。
 
 **资源建到了错误的 region**: 见"部署前置条件"。需要在错误的 region 里 `cdk destroy` 清理,再在 us-west-2 重新部署。
 

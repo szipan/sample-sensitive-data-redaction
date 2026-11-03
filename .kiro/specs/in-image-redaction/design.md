@@ -101,7 +101,7 @@ The four open decisions in the requirements are RESOLVED and fixed here:
 - **SDK/import constraints.** New code imports no Strands symbol and stays
   importable for unit testing without `boto3`, `strands`, or
   `bedrock_agentcore` installed (lazy client construction). Pillow and
-  `fitz`/PyMuPDF are imported lazily inside the functions that use them, so the
+  pikepdf, pypdfium2 and pdfminer.six are imported lazily inside the functions that use them, so the
   bulk of unit tests need neither installed.
 
 ## Architecture
@@ -180,7 +180,7 @@ sequenceDiagram
             RED->>RI: redact_image_bytes(whole-image fallback)
         end
         RI-->>RED: redacted image bytes (same format)
-        RED->>RED: re-embed (.pdf page.replace_image / .docx image part blob)
+        RED->>RED: re-embed (.pdf pdf_images.write_back_image / .docx image part blob)
     end
 ```
 
@@ -398,10 +398,9 @@ def redact_pdf_document_with_report(
   - `new_bytes = redaction_image.redact_image_bytes(image_bytes, region,
     spans)`, wrapping `ImageRedactionError` into `RedactionError`
     (Requirement 7.3).
-  - **Re-embed** with `page.replace_image(xref, stream=new_bytes)`. The `xref`
-    and `pageIndex` come from `sourceLocation` (`"page:{pageIndex}:xref:{xref}"`).
-    `Page.replace_image` (available since PyMuPDF 1.21.1, and in the pinned
-    1.28.0 — [PyMuPDF changelog](https://ghostscript.com/~julian/sphinx-docs-PyMuPDF/html/changes.html))
+  - **Re-embed** with `pdf_images.write_back_image(pdf, xref, new_bytes)`. The
+    `xref` and `pageIndex` come from `sourceLocation`
+    (`"page:{pageIndex}:xref:{xref}"`). `write_back_image` (pikepdf-based)
     swaps the image XObject's stream in place, so the redacted image appears at
     the original placement and size with no page-geometry math. This is chosen
     over overlaying opaque rectangles on the page rectangle because it edits the
@@ -413,8 +412,8 @@ def redact_pdf_document_with_report(
   `agreedRegions`) are unchanged; image rectangles are not folded into them
   (the report is a text-vs-OCR dual-path diagnostic — see its docstring), and
   per-image rectangle counts are captured in the OCR audit log instead
-  (Requirement 8.3). Image replacement runs after `apply_redactions`; then
-  `document.tobytes()` serializes once as today.
+  (Requirement 8.3). Image replacement runs after `pdf_content_edit` has applied the text
+  redactions; then the pikepdf document serializes once as today.
 
 The `bytes`-returning wrapper `redact_pdf_document` gains the same optional
 `image_regions` parameter, defaulting to `None`.
@@ -453,19 +452,18 @@ def redact_docx_document(
 leaves `imageBytes=None`. It now also populates the bytes:
 
 ```python
-extracted = document.extract_image(xref)   # {"image": bytes, "ext": "...", ...}
-image_bytes = extracted["image"] if extracted else None
+image_bytes = pdf_images.decode_image(pdf, xref)   # bytes Pillow can open, or None
 ```
 
-`Document.extract_image(xref)` returns the raw embedded stream and its extension
-([PyMuPDF docs](https://pymupdf.readthedocs.io/en/latest/document.html)). The
+`pdf_images.decode_image(pdf, xref)` returns image bytes that Pillow can open
+(a JPEG passthrough or a re-encoded PNG), or `None` (pikepdf-based). The
 `sourceLocation` format (`"page:{pageIndex}:xref:{xref}"`) is unchanged and
-remains the re-embed handle. If `extract_image` fails or returns an
+remains the re-embed handle. If `decode_image` fails or returns an
 unsupported/undecodable stream (e.g. a mask-only or exotic colorspace), the
 region keeps `imageBytes=None`; OCR then skips it, it carries no spans, and the
 redactor never touches it — the same best-effort posture as any un-OCR'd image.
 The extractor takes `document` (or a bound closure) so it can call the
-document-level `extract_image`.
+`pdf_images` reader.
 
 ### Component 6: `backend/agent/tools/extraction_docx.py` — emit `ImageRegion`s
 
@@ -578,10 +576,10 @@ variable is introduced (resolved decision A1).
   `backend/agent-runtime-requirements.txt`. Pin to a version publishing
   `cp312` aarch64 manylinux wheels (e.g. `Pillow==11.0.0`, which ships
   `manylinux_2_28_aarch64` and `manylinux2014_aarch64` cp312 wheels — matching
-  the platforms `build_agent_bundle.py` already downloads for PyMuPDF).
+  the platforms `build_agent_bundle.py` already downloads for the other binary wheels).
 - **The agent bundle must be rebuilt** (`scripts/build_agent_bundle.py`) so the
   aarch64 Pillow wheel is vendored into `agent_bundle/package_clean/`. This is
-  the same cross-platform pattern already used for PyMuPDF: the builder
+  the same cross-platform pattern already used for the other binary wheels: the builder
   downloads the aarch64 cp312 wheel via pip's `--platform`/`--python-version`
   flags and unpacks it into the bundle. **Flag:** the build must run on a Linux
   host (per the script's KNOWN LIMITATION), and the summary's key-package list
@@ -843,14 +841,14 @@ now a real dependency in the dev venv.
   P6), the JSON parser, and the localization-outcome logic. Properties 8, 10-ish
   retry, 12 (temperature), 13 (audit) are retained with JSON-shaped responses.
 - `tests/test_redaction_pdf.py`: add `image:` span cases — targeted redaction
-  via a stubbed `Page.replace_image`, and the whole-image fallback; assert the
+  via a stubbed `pdf_images.write_back_image`, and the whole-image fallback; assert the
   existing `text:`/`ocr:` behavior is unchanged (P11) and that a decode failure
   raises `RedactionError`.
 - `tests/test_redaction_docx.py`: add `image:` span cases — image part blob
   replacement by `sourceLocation` handle, targeted and fallback; existing text
   redaction unchanged.
 - `tests/test_extraction_pdf.py`: assert `imageBytes` is now populated from
-  `extract_image`, `sourceLocation` unchanged.
+  `pdf_images.decode_image`, `sourceLocation` unchanged.
 - `tests/test_extraction_docx.py`: assert one `ImageRegion` per media part with
   `imageBytes` and a `docx:part:` handle (was: empty list).
 - `tests/test_redaction_stack.py`: assert `IMAGE_OCR_MODEL_ID` is now the
@@ -877,8 +875,8 @@ when credentials, model access, region, Pillow, or a CJK font are missing, so
 `pytest tests` stays offline and free.
 
 **Regression baselines.** The suite continues to run as two processes (the
-`MagicMock` `sys.modules` `fitz`/`docx` stubs in the first command must not
-contaminate the real-`fitz`/`docx` tests in the second — image redaction tests
+`MagicMock` `sys.modules` PDF-library/`docx` stubs in the first command must not
+contaminate the real-PDF-library/`docx` tests in the second — image redaction tests
 that decode real PNGs and open real PDFs/docx belong in the second process).
 `tests/test_guardrails_pii_detect.py` and `tests/test_ocr_pdf.py`-equivalent
 paths must keep passing unmodified — this feature imports `_is_retryable` from

@@ -793,8 +793,8 @@ the document shape that exposed the gap, not that the model is perfect. Without
 this test the feature's premise is unverified.
 
 **Regression baselines.** The existing backend test commands continue to run
-as two separate processes (the MagicMock `sys.modules` `fitz`/`docx` stubs in
-the first command must not contaminate the real-`fitz` PDF tests in the
+as two separate processes (the MagicMock `sys.modules` PDF-library/`docx` stubs in
+the first command must not contaminate the real-PDF-library tests in the
 second). `tests/test_ocr.py` is rewritten in place; the rest of the suite is
 unaffected, since the tool's signature and downstream contract are unchanged.
 `tests/test_guardrails_pii_detect.py` must keep passing unmodified — this

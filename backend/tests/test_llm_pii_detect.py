@@ -1,7 +1,7 @@
 """Tests for `agent/tools/llm_pii_detect.py`
 (llm-cjk-pii-recall design.md "Component 2: `backend/agent/tools/llm_pii_detect.py`").
 
-This module is kept free of `fitz`/`python-docx` imports so it runs on
+This module is kept free of PDF-library/`python-docx` imports so it runs on
 developer machines without those native dependencies — the tool under test
 only depends on `shared.models`, `agent.tools.pii_offsets`, and (lazily)
 boto3, and the boto3 client is always replaced with an in-test fake here.

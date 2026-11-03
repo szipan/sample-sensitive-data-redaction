@@ -22,7 +22,7 @@ The `pdf-dual-path-pii-detection` feature made PDF detection dual-path so that a
 
 So a Chinese document's CJK-only PII — names, addresses, licence plates — reaches the redactor through exactly one route: text layer → Guardrails. A Chinese PDF with a damaged ToUnicode CMap loses that route and the Textract route at the same time, and the job still reports `completed`. The LLM source restores a second independent reader of the *text*, which is the only surface where CJK actually survives.
 
-BDA's result is worth restating because it shapes this design: it produced excellent geometry with useless text. That is the exact inverse of what this feature needs. We already have geometry — `rawdict` character rectangles for the text layer, Textract word boxes for the OCR path. What is missing is a reader that understands the characters.
+BDA's result is worth restating because it shapes this design: it produced excellent geometry with useless text. That is the exact inverse of what this feature needs. We already have geometry — `pdf_glyphs.collect_page_glyphs` character rectangles for the text layer, Textract word boxes for the OCR path. What is missing is a reader that understands the characters.
 
 ### Why text-in, text-out — and explicitly not a multimodal model reading page images
 
@@ -604,7 +604,7 @@ Feature: llm-cjk-pii-recall, Property {number}: {property title}
 
 **The recall test that justifies the feature.** A dedicated integration test runs the pipeline against `chi.pdf` and `chi.docx` with a real model call and asserts a **recall floor**, not an equality: the VIN `LSVAU2A89CN123456` — which Guardrails never detects — is covered, and the Chinese resident identity number and personal names are covered. It is marked optional because it costs a real model invocation, and its assertion is deliberately one-sided: it may find *more* than it asserts, and passing does not certify the model, only that the path works end to end on the documents that exposed the gap. Without this test the feature's premise is unverified.
 
-**Regression baselines.** The two existing backend test commands must be run as two separate processes, with `tests\test_regroup_and_merge.py` listed first in the first command because it registers `fitz`/`docx` MagicMock `sys.modules` stubs, while the PDF tests need a process with the real `fitz`:
+**Regression baselines.** The two existing backend test commands must be run as two separate processes, with `tests\test_regroup_and_merge.py` listed first in the first command because it registers PDF-library/`docx` MagicMock `sys.modules` stubs, while the PDF tests need a process with the real PDF libraries:
 
 ```
 .venv\Scripts\python.exe -m pytest tests\test_regroup_and_merge.py tests\test_orchestration.py tests\test_matching.py tests\test_guardrails_pii_detect.py tests\test_llm_pii_detect.py tests\test_pii_offsets.py -q

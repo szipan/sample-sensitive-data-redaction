@@ -71,13 +71,14 @@ Requirements: 1.1, 1.9, 2.2, 2.4, 5.4.
 """
 from __future__ import annotations
 
+import io
 import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from unittest.mock import patch
 
-import fitz  # PyMuPDF
+import pypdfium2 as pdfium
 import pytest
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -272,9 +273,12 @@ def _run_dual_path_pipeline(pdf_bytes: bytes) -> dict:
 
 
 def _render_page_png(pdf_bytes: bytes, page_index: int, dpi: int) -> bytes:
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    document = pdfium.PdfDocument(pdf_bytes)
     try:
-        return document.load_page(page_index).get_pixmap(dpi=dpi).tobytes("png")
+        bitmap = document[page_index].render(scale=dpi / 72.0)
+        buffer = io.BytesIO()
+        bitmap.to_pil().save(buffer, format="PNG")
+        return buffer.getvalue()
     finally:
         document.close()
 
@@ -284,7 +288,7 @@ def _locate_names(
 ) -> Dict[str, Tuple[float, float, float, float]]:
     """Find each name on the SOURCE page and return its normalized box.
 
-    Deliberately built from `boto3` and `fitz` directly rather than from
+    Deliberately built from `boto3` and `pypdfium2` directly rather than from
     `ocr_pdf_pages`: the instrument that says where a name *is* must not be
     the same code path whose output the test is judging.
 
@@ -349,22 +353,22 @@ def _black_fraction(
 ) -> float:
     """Fraction of near-black pixels inside `normalized_box` on a rendered page.
 
-    The box's fractions are of the whole page, and `get_pixmap` rasterizes the
-    whole page, so they scale onto the pixmap by its own width/height with no
+    The box's fractions are of the whole page, and the render rasterizes the
+    whole page, so they scale onto the bitmap by its own width/height with no
     dpi arithmetic — the same reason `_normalized_bbox_to_page_rect` takes no
     dpi parameter.
     """
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    document = pdfium.PdfDocument(pdf_bytes)
     try:
-        pixmap = document.load_page(page_index).get_pixmap(dpi=dpi)
+        pixmap = document[page_index].render(scale=dpi / 72.0)
         left, top, width, height = normalized_box
         x0 = max(0, int(left * pixmap.width))
         y0 = max(0, int(top * pixmap.height))
         x1 = min(pixmap.width, max(x0 + 1, int((left + width) * pixmap.width)))
         y1 = min(pixmap.height, max(y0 + 1, int((top + height) * pixmap.height)))
 
-        samples = pixmap.samples
-        components = pixmap.n
+        samples = pixmap.buffer
+        components = pixmap.n_channels
         stride = pixmap.stride
         black = 0
         total = 0

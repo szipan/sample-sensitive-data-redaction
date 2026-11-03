@@ -2,7 +2,7 @@
 (bedrock-guardrails-pii-integration design.md "Component 2: Guardrails PII
 Detection Tool").
 
-This module is kept free of `fitz`/`python-docx` imports so it runs on
+This module is kept free of PDF-library/`python-docx` imports so it runs on
 developer machines where those native dependencies are unavailable — the
 tool under test only depends on `shared.models` and (lazily) boto3, and the
 boto3 client is always replaced with an in-test fake here.

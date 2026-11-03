@@ -17,7 +17,7 @@ PII Document Redaction POC 由两个可独立部署的组件构成：
 | Job 派发到 Agent | DynamoDB Streams 触发 Dispatcher Lambda，再调用 AgentCore `InvokeAgentRuntime` | 解耦上传请求与 Agent 执行，上传 API 可快速返回，Agent 处理时间不受 API Gateway 29 秒超时限制 |
 | Rule Operation 顺序化 | Amazon SQS FIFO 队列（单一 MessageGroupId）+ 单条处理（`BatchSize=1`）的消费者 Lambda | FIFO 保证顺序，单一 Message Group 保证同一时刻只有一条消息被处理，天然满足“下一个 Rule Operation 必须等上一个到达 Terminal Result 才开始”的要求，且完全托管 |
 | Rule Operation 结果获取 | 提交为异步操作（返回 `operationId`），前端轮询操作状态直至 Terminal Result | 与 Redaction Job 的状态轮询模式保持一致，简化前端状态管理 |
-| 文档解析 | `.docx` 用 `python-docx`（XML 级修改，保留未匹配内容与结构）；文本型 `.pdf` 用 `PyMuPDF`（`fitz`），使用其原生 redaction annotation 能力覆盖并擦除文本 | 两者均可在保留页面/表格结构的前提下做“最小化修改” |
+| 文档解析 | `.docx` 用 `python-docx`（XML 级修改，保留未匹配内容与结构）；文本型 `.pdf` 用 `pdfminer.six`（`pdf_glyphs.collect_page_glyphs`）读取字形、`pikepdf`（`pdf_content_edit`）做内容流字形移除并绘制黑框、`pypdfium2` 做页面栅格化 | 两者均可在保留页面/表格结构的前提下做“最小化修改” |
 | 图片/扫描页文字识别 | Amazon Textract `DetectDocumentText` | AWS 托管 OCR 服务，避免自建 OCR 模型 |
 | Agent 运行环境 | Amazon Bedrock AgentCore Runtime，工具通过 Strands Agents SDK 定义并在 Runtime 进程内直接调用（非跨网络的 Gateway 工具） | POC 阶段无需跨团队工具共享，直接函数调用 tool 更简单、延迟更低；仍完全托管、按需扩展 |
 
@@ -325,10 +325,10 @@ AgentCore Redaction Agent 使用 Strands Agents SDK 构建，部署到 Amazon Be
 
 | 工具 | 输入 | 输出 | 说明 |
 |---|---|---|---|
-| `extract_document_content` | 源文档 S3 引用、扩展名 | `ExtractedTextUnit[]`、`ImageRegion[]`（占位，`recognizedText` 待填）、页面/表格结构元数据 | `.docx` 用 `python-docx` 遍历段落/表格/页眉页脚 XML 节点；`.pdf` 用 `PyMuPDF` 按页提取文本块与图像位置 |
+| `extract_document_content` | 源文档 S3 引用、扩展名 | `ExtractedTextUnit[]`、`ImageRegion[]`（占位，`recognizedText` 待填）、页面/表格结构元数据 | `.docx` 用 `python-docx` 遍历段落/表格/页眉页脚 XML 节点；`.pdf` 用 `pdf_glyphs.collect_page_glyphs` 按页提取字形文本，`pdf_images` 提取图像位置 |
 | `recognize_image_text` | `ImageRegion[]`（图片字节） | 填充后的 `ImageRegion[]`（含 `recognizedText`、`boundingBox`） | 调用 Amazon Textract `DetectDocumentText`；仅当文档含图片/扫描页时调用 |
 | `match_rules` | `ExtractedTextUnit[]` + 已识别的 `ImageRegion[]`、启用的 `RedactionRule[]`（从 DynamoDB 读取） | `MatchSpan[]`（已合并重叠区间） | 对每个文本单元 × 每条启用规则执行 `re.finditer`；合并同一文本单元内重叠/相邻的匹配区间为单一区间 |
-| `redact_document` | 源文档、`MatchSpan[]` | Redacted Document 字节流 | `.docx`：仅修改包含匹配的 run/单元格 XML 节点，用实心图形覆盖并清空匹配文本，其余节点原样保留；`.pdf`：使用 `page.add_redact_annot(rect, fill=(0,0,0))` 标记后 `page.apply_redactions()` 永久擦除并填充黑色 |
+| `redact_document` | 源文档、`MatchSpan[]` | Redacted Document 字节流 | `.docx`：仅修改包含匹配的 run/单元格 XML 节点，用实心图形覆盖并清空匹配文本，其余节点原样保留；`.pdf`：使用 `pdf_content_edit` 在内容流中移除命中字形并绘制黑色实心框，永久擦除 |
 | `verify_structure` | 源文档、Redacted Document | 校验结果（布尔 + 失败原因） | 校验扩展名一致、页数一致、页序一致、每个表格行列数一致；不一致则视为处理失败 |
 | `store_redacted_document` | Redacted Document 字节流、`jobId` | S3 输出对象键 | 写入输出桶，键格式 `{jobId}/{fileName}` |
 | `update_job_status` | `jobId`、`completed`\|`failed`、可选错误信息、可选 `redactedKey` | - | 更新 `RedactionJobs` 表 |

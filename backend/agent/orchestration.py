@@ -194,6 +194,20 @@ def _read_source_bytes(source_key: str) -> bytes:
     return s3_object["Body"].read()
 
 
+def _delete_source_document(source_key: str) -> None:
+    """Remove the unredacted source once the Job has completed. Best effort:
+    a failure is logged and left to the bucket's lifecycle expiry."""
+    try:
+        _get_s3_client().delete_object(
+            Bucket=os.environ[SOURCE_BUCKET_NAME_ENV_VAR], Key=source_key
+        )
+    except Exception as exc:  # noqa: BLE001 - never fail a completed Job
+        logger.warning(
+            "Could not delete source document for completed Job: %s",
+            type(exc).__name__,
+        )
+
+
 def _load_enabled_rules() -> List[RedactionRule]:
     """Load every stored Redaction Rule and return only the enabled ones."""
     return [rule for rule in RulesRepository().get_all() if rule.enabled]
@@ -269,7 +283,7 @@ def _non_whitespace_count(text: str) -> int:
     """Number of non-whitespace characters in `text`.
 
     Whitespace is excluded because the two detection paths disagree about it
-    by construction and not by defect: the text layer's `rawdict` traversal
+    by construction and not by defect: the text layer's per-character traversal
     records the document's own spacing characters, while the OCR_Path
     synthesizes separators (`" "` within a recognized line, `"\\n"` between
     lines). Counting whitespace would therefore make every page look
@@ -758,6 +772,7 @@ def handle_job(job_id: str) -> None:
             redacted_key=redacted_key,
             detection_summary=detection_summary,
         )
+        _delete_source_document(job.sourceKey)
     except OcrPathError as exc:
         # The OCR_Path is a primary `.pdf` source, so its failure fails the
         # Job (see the call site). The failing page, when known, is reported

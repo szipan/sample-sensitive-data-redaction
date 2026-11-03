@@ -56,6 +56,11 @@ from shared.builtin_rules import BUILT_IN_RULES
 # pinned/versioned-id rule (a floating alias would be rejected).
 # `LLM_PII_FOUNDATION_MODEL` is the underlying foundation model that profile
 # routes to — needed for the second IAM grant below.
+# How long uploaded, redacted and detection artifacts (S3 objects and job
+# records) are kept. After this the S3 lifecycle rule and the DynamoDB TTL
+# remove them, so unredacted source text cannot linger indefinitely.
+DOCUMENT_RETENTION_DAYS = 1
+
 LLM_PII_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 LLM_PII_FOUNDATION_MODEL = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
@@ -103,6 +108,8 @@ class RedactionStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             stream=dynamodb.StreamViewType.NEW_IMAGE,
+            # Job records expire together with their S3 objects.
+            time_to_live_attribute="expiresAt",
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -142,6 +149,14 @@ class RedactionStack(Stack):
             "SourceDocumentsBucket",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="ExpireDocuments",
+                    enabled=True,
+                    expiration=Duration.days(DOCUMENT_RETENTION_DAYS),
+                    abort_incomplete_multipart_upload_after=Duration.days(1),
+                )
+            ],
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
         )
@@ -150,6 +165,14 @@ class RedactionStack(Stack):
             "OutputDocumentsBucket",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="ExpireDocuments",
+                    enabled=True,
+                    expiration=Duration.days(DOCUMENT_RETENTION_DAYS),
+                    abort_incomplete_multipart_upload_after=Duration.days(1),
+                )
+            ],
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
         )
@@ -376,6 +399,7 @@ class RedactionStack(Stack):
             environment={
                 "SOURCE_BUCKET_NAME": self.source_documents_bucket.bucket_name,
                 "JOBS_TABLE_NAME": self.jobs_table.table_name,
+                "JOB_RETENTION_DAYS": str(DOCUMENT_RETENTION_DAYS),
             },
         )
         self.source_documents_bucket.grant_write(self.upload_handler)
@@ -590,6 +614,13 @@ class RedactionStack(Stack):
                             resources=[
                                 self.source_documents_bucket.arn_for_objects("*"),
                                 self.output_documents_bucket.arn_for_objects("*"),
+                            ],
+                        ),
+                        # Source documents are removed once a job completes.
+                        iam.PolicyStatement(
+                            actions=["s3:DeleteObject"],
+                            resources=[
+                                self.source_documents_bucket.arn_for_objects("*"),
                             ],
                         ),
                         iam.PolicyStatement(

@@ -6,21 +6,23 @@ Covers design.md's `extract_document_content` tool description for `.pdf`:
 - Page count / page order structural metadata is correct for a
   multi-page document.
 - An embedded image produces an `ImageRegion` with a populated `boundingBox`,
-  populated `imageBytes` (from `document.extract_image(xref)`), and no `recognizedText`
+  populated `imageBytes` (decoded by `pdf_images.decode_image`), and no `recognizedText`
   yet.
-- Extraction is best-effort about image bytes: when `document.extract_image`
-  cannot materialize a stream (`_extract_image_bytes` returns `None`), the
+- Extraction is best-effort about image bytes: when the image
+  cannot be decoded (`_extract_image_bytes` returns `None`), the
   region still exists with `imageBytes=None` and extraction does not crash.
 - A corrupted/non-PDF byte stream raises `ExtractionError`.
 
-Test PDFs are built on the fly with `PyMuPDF` itself (no external fixture
-files, no `reportlab` dependency needed).
+Test PDFs are built on the fly with `tests/pdf_fixtures.py` (no external
+fixture files).
 """
+import io
 import sys
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import pikepdf
 import pytest
+from PIL import Image
 
 # Ensure `agent/` and `shared/` are importable the same way the Strands
 # Agents SDK Runtime would, mirroring the `sys.path` convention used by
@@ -29,6 +31,11 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from agent.tools import extraction_pdf
+from tests.pdf_fixtures import (
+    simple_image_pdf,
+    simple_multi_page_pdf,
+    simple_text_pdf,
+)
 from agent.tools.extraction_pdf import (
     ExtractionError,
     _extract_image_bytes,
@@ -37,47 +44,25 @@ from agent.tools.extraction_pdf import (
 
 
 def _build_single_page_text_pdf(text: str) -> bytes:
-    document = fitz.open()
-    try:
-        page = document.new_page()
-        page.insert_text((72, 72), text)
-        return document.tobytes()
-    finally:
-        document.close()
+    return simple_text_pdf([text])
 
 
 def _build_multi_page_pdf(page_texts):
-    document = fitz.open()
-    try:
-        for text in page_texts:
-            page = document.new_page()
-            page.insert_text((72, 72), text)
-        return document.tobytes()
-    finally:
-        document.close()
+    return simple_multi_page_pdf([[text] for text in page_texts])
 
 
 def _build_single_page_pdf_with_image() -> bytes:
-    """Build a one-page PDF containing a small embedded raster image, by
-    first rendering a tiny source PDF page to a pixmap (PNG bytes) and then
-    inserting that image into a fresh page - avoiding any dependency on an
-    external image file or library."""
-    source_document = fitz.open()
-    try:
-        source_page = source_document.new_page(width=50, height=50)
-        source_page.draw_rect(fitz.Rect(5, 5, 45, 45), fill=(1, 0, 0))
-        pixmap = source_page.get_pixmap()
-        image_bytes = pixmap.tobytes("png")
-    finally:
-        source_document.close()
+    """A one-page PDF with one embedded 50x50 RGB raster image."""
+    return simple_image_pdf(50, 50, kind="rgb", color=(255, 0, 0))
 
-    document = fitz.open()
-    try:
-        page = document.new_page()
-        page.insert_image(fitz.Rect(50, 50, 150, 150), stream=image_bytes)
-        return document.tobytes()
-    finally:
-        document.close()
+
+def _first_image_xref(pdf_bytes: bytes) -> int:
+    with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
+        return next(
+            obj.objgen[0]
+            for obj in pdf.objects
+            if isinstance(obj, pikepdf.Stream) and obj.get("/Subtype") == "/Image"
+        )
 
 
 def test_extracts_text_units_with_body_zone_for_known_page_text():
@@ -122,7 +107,7 @@ def test_extracts_image_region_with_bounding_box_and_bytes():
     assert image_region.boundingBox.width > 0
     assert image_region.boundingBox.height > 0
     assert image_region.sourceLocation.startswith("page:0:xref:")
-    # imageBytes is now populated from `document.extract_image(xref)`
+    # imageBytes is now populated by `pdf_images.decode_image`
     # Rather than left `None` as a placeholder.
     assert isinstance(image_region.imageBytes, bytes)
     assert len(image_region.imageBytes) > 0
@@ -131,16 +116,22 @@ def test_extracts_image_region_with_bounding_box_and_bytes():
 def test_extracted_image_bytes_are_decodable_as_an_image():
     """The bytes populated on the region are the raw embedded image stream,
     so a downstream consumer (the OCR / in-image redaction tools) can decode
-    them - here re-opened via PyMuPDF as a sanity check."""
+    them - here re-opened via Pillow as a sanity check."""
     pdf_bytes = _build_single_page_pdf_with_image()
 
     result = extract_pdf_content(pdf_bytes)
 
     image_bytes = result.imageRegions[0].imageBytes
     assert image_bytes is not None
-    pixmap = fitz.Pixmap(image_bytes)
-    assert pixmap.width > 0
-    assert pixmap.height > 0
+    with Image.open(io.BytesIO(image_bytes)) as decoded:
+        decoded.load()
+        assert decoded.width > 0
+        assert decoded.height > 0
+        # Pixel size equals the image object's /Width and /Height.
+        with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
+            xref = int(result.imageRegions[0].sourceLocation.rsplit(":", 1)[1])
+            obj = pdf.get_object((xref, 0))
+            assert decoded.size == (int(obj["/Width"]), int(obj["/Height"]))
 
 
 def test_image_region_still_emitted_when_bytes_cannot_be_extracted(monkeypatch):
@@ -149,7 +140,7 @@ def test_image_region_still_emitted_when_bytes_cannot_be_extracted(monkeypatch):
     still emitted with `imageBytes=None` while `sourceLocation`/`boundingBox`
     remain populated - extraction does not crash."""
     monkeypatch.setattr(
-        extraction_pdf, "_extract_image_bytes", lambda document, xref: None
+        extraction_pdf, "_extract_image_bytes", lambda pdf, xref: None
     )
     pdf_bytes = _build_single_page_pdf_with_image()
 
@@ -162,37 +153,52 @@ def test_image_region_still_emitted_when_bytes_cannot_be_extracted(monkeypatch):
     assert image_region.sourceLocation.startswith("page:0:xref:")
 
 
-class _FakeDocument:
-    """Minimal stand-in for a `fitz.Document` exposing only the
-    `extract_image(xref)` method that `_extract_image_bytes` calls."""
+def test_extract_image_bytes_returns_decodable_bytes_for_real_image():
+    pdf_bytes = _build_single_page_pdf_with_image()
+    xref = _first_image_xref(pdf_bytes)
 
-    def __init__(self, behavior):
-        self._behavior = behavior
+    with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
+        data = _extract_image_bytes(pdf, xref)
+        obj = pdf.get_object((xref, 0))
+        expected_size = (int(obj["/Width"]), int(obj["/Height"]))
 
-    def extract_image(self, xref):
-        return self._behavior(xref)
-
-
-def test_extract_image_bytes_returns_bytes_when_present():
-    document = _FakeDocument(lambda xref: {"image": b"\x89PNG-bytes", "ext": "png"})
-
-    assert _extract_image_bytes(document, 7) == b"\x89PNG-bytes"
-
-
-def test_extract_image_bytes_returns_none_when_extract_raises():
-    def _raise(xref):
-        raise RuntimeError("cannot materialize image")
-
-    document = _FakeDocument(_raise)
-
-    assert _extract_image_bytes(document, 7) is None
+    assert isinstance(data, bytes)
+    assert len(data) > 0
+    with Image.open(io.BytesIO(data)) as decoded:
+        decoded.load()
+        assert decoded.size == expected_size
 
 
-@pytest.mark.parametrize("empty_result", [None, {}, {"image": b""}, {"ext": "png"}])
-def test_extract_image_bytes_returns_none_for_empty_or_missing_stream(empty_result):
-    document = _FakeDocument(lambda xref: empty_result)
+def _pdf_with_unusable_image_object(case: str):
+    """Return `(pdf, xref)` where `xref` is not a decodable image."""
+    pdf = pikepdf.new()
+    if case == "missing_object":
+        return pdf, 9999
+    if case == "not_an_image":
+        return pdf, pdf.make_indirect(pikepdf.Dictionary()).objgen[0]
+    stream = pikepdf.Stream(pdf, b"")
+    stream["/Type"] = pikepdf.Name("/XObject")
+    stream["/Subtype"] = pikepdf.Name("/Image")
+    stream["/Width"] = 4
+    stream["/Height"] = 4
+    stream["/ColorSpace"] = pikepdf.Name("/DeviceRGB")
+    stream["/BitsPerComponent"] = 8
+    if case == "undecodable_filter":
+        stream.write(b"not image data", filter=pikepdf.Name("/DCTDecode"))
+    elif case != "empty_stream":
+        raise ValueError(case)
+    return pdf, pdf.make_indirect(stream).objgen[0]
 
-    assert _extract_image_bytes(document, 7) is None
+
+@pytest.mark.parametrize(
+    "case", ["missing_object", "not_an_image", "empty_stream", "undecodable_filter"]
+)
+def test_extract_image_bytes_returns_none_for_unusable_image_object(case):
+    pdf, xref = _pdf_with_unusable_image_object(case)
+    try:
+        assert _extract_image_bytes(pdf, xref) is None
+    finally:
+        pdf.close()
 
 
 def test_raises_extraction_error_for_corrupted_pdf_bytes():

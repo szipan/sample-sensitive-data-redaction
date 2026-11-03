@@ -1,0 +1,1372 @@
+{
+  "pbtResults": {
+    "3.2 编写坐标换算往返的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793674563473
+    },
+    "8.3 编写文本层单元结构与内容的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793683487564
+    },
+    "9.4 编写 DPI 配置解析的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793683971428
+    },
+    "9.5 编写 Textract 响应拼接的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793684345946
+    },
+    "11.8 编写删除与保留精确划分的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793696382701
+    },
+    "11.11 编写结构保持与单一修订输出的属性测试": {
+      "status": "failed",
+      "failingExample": "redact_pdf_document_with_report raises RedactionError(\"Retained text moved on page N (independent reader)\") — false positive in _verify_independent_reader for overlapping same-text glyphs. Minimal: PageSpec(media_box=(0,0,300,400), runs=(TextRun(\"0\",x=10,y=40,size=8), TextRun(\"000000\",10,40,8), TextRun(\"0\",10,40,8,tc=1), TextRun(\"000000\",10,40,8))); extracted unit '00000000000000'; spans = every match of \"000\" -> (0,3),(3,6),(6,9),(9,12). PDFium merges overlapping identical chars in the SOURCE (only 6 boxes reported for 14 glyphs), so the two retained glyphs (x=31.792, 37.24) are absent from _source_char_boxes; once their twins are deleted they surface in the output and _take_matching_box fails. Property 8's test tolerates exactly this (_has_same_text_overlap), the agent verifier does not. With overlap docs excluded (temporary probe), all Property 11 checks pass across 6 random seeds.",
+      "lastRunTimestamp": 1793710261530
+    },
+    "11.12 编写零区域等价输出的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793711191746
+    },
+    "11.14 编写报告计数的属性测试": {
+      "status": "passed",
+      "lastRunTimestamp": 1793712507487
+    }
+  },
+  "executionHistory": {
+    "1.1 修正 design.md 中的核实日期并记录已确认决定": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630368777
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630697719
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630955454
+      }
+    ],
+    "1.2 创建后端虚拟环境并记录改动前的后端测试基线": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630374005
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630963507
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793632753262
+      }
+    ],
+    "1.3 记录改动前的前端检查基线": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630378595
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793632762586
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793672915062
+      }
+    ],
+    "2.1 在依赖清单中加入新依赖（暂时保留旧库）": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630383265
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793632764542
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793672916822
+      }
+    ],
+    "2.2 编写测试 PDF 构造器 `backend/tests/pdf_fixtures.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630388095
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793672926571
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674374905
+      }
+    ],
+    "2.3 为测试 PDF 构造器编写冒烟测试 `backend/tests/test_pdf_fixtures.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630392967
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674385769
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674667985
+      }
+    ],
+    "3.1 实现 `backend/agent/tools/pdf_geometry.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630397381
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793672928426
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674376741
+      }
+    ],
+    "3.2 编写坐标换算往返的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630401885
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674387701
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674670485
+      }
+    ],
+    "3.3 编写坐标换算的示例测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630406947
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674682087
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793675940625
+      }
+    ],
+    "4.1 实现文档打开与内部数据类": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630411805
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674389815
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674672569
+      }
+    ],
+    "4.2 实现内容流解释器与字形记录": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630416477
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674684310
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793675942491
+      }
+    ],
+    "4.3 实现字符位置展开、行分组与对外函数": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630421285
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793675951918
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676176672
+      }
+    ],
+    "4.4 编写字符偏移映射不变量的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630426285
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676185419
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676643374
+      }
+    ],
+    "4.5 编写 `pdf_glyphs` 的示例测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630431046
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676654979
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681695217
+      }
+    ],
+    "5. Checkpoint - 确认新模块测试通过": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630435802
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714210741
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714446685
+      }
+    ],
+    "6.1 实现删除计划与位移计算": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630440577
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676187412
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676645321
+      }
+    ],
+    "6.2 实现操作符改写与序号对齐校验": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630445293
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676656832
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793680985424
+      }
+    ],
+    "6.3 实现 Form XObject 写时复制": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630449896
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681000815
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681697072
+      }
+    ],
+    "6.4 实现注释移除与黑框绘制": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630454702
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683132653
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683382685
+      }
+    ],
+    "6.5 实现文档级残留清理": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630459366
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683390674
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683663487
+      }
+    ],
+    "6.6 编写 `pdf_content_edit` 的单元测试 `backend/tests/test_pdf_content_edit.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630464045
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683671849
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683838476
+      }
+    ],
+    "7.1 实现图片列表与解码": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630468875
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676189320
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676647294
+      }
+    ],
+    "7.2 实现图片写回": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630473825
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793676658575
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793680983579
+      }
+    ],
+    "7.3 编写 `pdf_images` 的单元测试 `backend/tests/test_pdf_images.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630478496
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681002753
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681698904
+      }
+    ],
+    "8.1 重写 `backend/agent/tools/extraction_pdf.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630483117
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681717851
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683124626
+      }
+    ],
+    "8.2 改写 `tests/conftest.py` 与 `tests/test_extraction_pdf.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630487729
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683135025
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683380769
+      }
+    ],
+    "8.3 编写文本层单元结构与内容的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630492255
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683392419
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683659811
+      }
+    ],
+    "8.4 编写图片区域契约的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630497037
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683673720
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683840219
+      }
+    ],
+    "8.5 编写提取侧输入错误的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630501995
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683853939
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684225780
+      }
+    ],
+    "8.6 编写提取侧示例测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630506786
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684237462
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684455672
+      }
+    ],
+    "9.1 重写 `backend/agent/tools/ocr_pdf.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630511281
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683136746
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683378817
+      }
+    ],
+    "9.2 编写 OCR_Path 示例测试 `backend/tests/test_ocr_pdf.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630515539
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683394281
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683661696
+      }
+    ],
+    "9.3 编写 OCR 每页一个单元的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630519995
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683675795
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683842195
+      }
+    ],
+    "9.4 编写 DPI 配置解析的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630523924
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683855911
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684227607
+      }
+    ],
+    "9.5 编写 Textract 响应拼接的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630528078
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684239204
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684457358
+      }
+    ],
+    "9.6 编写页面几何与 PDFium 一致的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630532201
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683677657
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683844029
+      }
+    ],
+    "10. Checkpoint - 提取与 OCR 路径": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630536329
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714448336
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714458313
+      }
+    ],
+    "11.1 实现区域解析与报告": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630540765
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683857858
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684229484
+      }
+    ],
+    "11.2 实现图片写回、页面改写与保存": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630544743
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684241183
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684459047
+      }
+    ],
+    "11.3 实现脱敏后复核（失败即报错）": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630548863
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684472932
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684811437
+      }
+    ],
+    "11.4 改写 `backend/tests/test_redaction_pdf.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630552803
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684820835
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793685006603
+      }
+    ],
+    "11.5 编写泄漏测试 `backend/tests/test_pdf_leak.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630557835
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684822699
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793685004710
+      }
+    ],
+    "11.6 编写 `text:` 区域按行精确覆盖的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630562685
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688416990
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688962112
+      }
+    ],
+    "11.7 编写比例估算回退的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630567427
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688976940
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793691091506
+      }
+    ],
+    "11.8 编写删除与保留精确划分的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630572123
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793691106721
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793698084964
+      }
+    ],
+    "11.9 编写独立工具提取不到 PII 的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630576975
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793698086952
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793699096549
+      }
+    ],
+    "11.10 编写黑框覆盖与层级的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630581655
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793699098387
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793699861563
+      }
+    ],
+    "11.11 编写结构保持与单一修订输出的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630586599
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793699863453
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793711085845
+      }
+    ],
+    "11.12 编写零区域等价输出的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630591270
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793711087870
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793711224243
+      }
+    ],
+    "11.13 编写图片写回的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630595984
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793711226084
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793712033252
+      }
+    ],
+    "11.14 编写报告计数的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630600737
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793712035061
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793712529581
+      }
+    ],
+    "11.15 编写脱敏侧输入错误与无效引用的属性测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630605463
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793712531294
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793713530033
+      }
+    ],
+    "12.1 更新 `structure_verification.py` 注释并改写其测试": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630609968
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684824639
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793685008404
+      }
+    ],
+    "12.2 改写受环境变量保护的测试与桩模块名单": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630614448
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684826704
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793685098314
+      }
+    ],
+    "12.3 编写对外接口兼容测试 `backend/tests/test_pdf_public_interface.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630619147
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684828614
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793685010173
+      }
+    ],
+    "12.4 在 design.md 中核对等价改写映射表": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630623815
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793685108536
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688402190
+      }
+    ],
+    "13. Checkpoint - 脱敏路径与测试改写": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630627587
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714460271
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714468593
+      }
+    ],
+    "14.1 从依赖清单中删除已移除的 PDF 库并重建虚拟环境": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630631560
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793713545123
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793713714289
+      }
+    ],
+    "14.2 更新 `backend/scripts/build_agent_bundle.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630635660
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688418828
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688963790
+      }
+    ],
+    "14.3 更新 `backend/scripts/sync_agent_bundle.py` 注释": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630639585
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688420581
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688965697
+      }
+    ],
+    "14.4 编写 bundle 脚本测试 `backend/tests/test_build_agent_bundle.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630643887
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688978715
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793691096993
+      }
+    ],
+    "15.1 新增仓库根目录 `THIRD-PARTY-LICENSES`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630648467
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630650050
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793713727794
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714006051
+      }
+    ],
+    "15.2 更新根目录 `README.md`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630652751
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630654272
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688980839
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793691095379
+      }
+    ],
+    "15.3 编写依赖合规测试 `backend/tests/test_dependency_compliance.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630657091
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630658631
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714014741
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714128430
+      }
+    ],
+    "16.1 清理后端其余源码与测试中的旧库引用": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630661469
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630662842
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688422379
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688967461
+      }
+    ],
+    "16.2 更新其他规格文档中的旧库描述": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630665756
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630667266
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688424206
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793691093512
+      }
+    ],
+    "16.3 编写已移除库检查测试 `backend/tests/test_removed_library_absent.py`": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630670157
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630671733
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714016810
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714130358
+      }
+    ],
+    "17. Checkpoint - 完整后端与前端检查": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630674349
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630676040
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714470242
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714589987
+      }
+    ],
+    "18.1 准备并记录 Linux ARM64 上的手动验证步骤": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630678845
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630680270
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714145622
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714194142
+      }
+    ],
+    "19. Final checkpoint - 残留标识零匹配": [
+      {
+        "executionId": "deb1982c-56da-4a22-86b0-3e5bb524afed",
+        "chatSessionId": "sess_18017719-2eb5-4eb6-a012-d4518d372eb3",
+        "timestamp": 1793630683025
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793630684607
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714591752
+      },
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714655738
+      }
+    ],
+    "1. 设计文档修订与改动前基线": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793672918833
+      }
+    ],
+    "2. 新增依赖与测试 PDF 构造器": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793674674470
+      }
+    ],
+    "3. 实现坐标模块 `pdf_geometry.py`": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793675944386
+      }
+    ],
+    "4. 实现共用字符遍历 `pdf_glyphs.py`": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681701088
+      }
+    ],
+    "7. 实现图片解码与写回 `pdf_images.py`": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793681703045
+      }
+    ],
+    "6. 实现内容流改写 `pdf_content_edit.py`": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793683845964
+      }
+    ],
+    "8. 重写 PDF_Extractor": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684460925
+      }
+    ],
+    "9. 重写 OCR_Path": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793684462749
+      }
+    ],
+    "12. 结构校验与其余测试改写": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793688406416
+      }
+    ],
+    "11. 重写 PDF_Redactor": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793713534311
+      }
+    ],
+    "14. 移除旧库与更新 bundle 脚本": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793713718639
+      }
+    ],
+    "15. 许可证文件与 README": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714132223
+      }
+    ],
+    "16. 全仓库残留引用清理": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714134052
+      }
+    ],
+    "18. Linux ARM64 手动验证": [
+      {
+        "executionId": "512eb5f4-887f-40ad-a660-c00e8bea9a95",
+        "chatSessionId": "sess_e03f0190-7559-4e8e-b7c5-e37637ca013b",
+        "timestamp": 1793714198376
+      }
+    ]
+  }
+}

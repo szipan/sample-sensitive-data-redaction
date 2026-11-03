@@ -1,22 +1,20 @@
-r"""`ocr_pdf_pages` Agent tool (pdf-dual-path-pii-detection design.md
-"Component 1: `backend/agent/tools/ocr_pdf.py`", task 2.1).
+r"""`ocr_pdf_pages` Agent tool.
 
 Produces the OCR_Path's text units for a `.pdf` document: every page is
-rasterized with PyMuPDF and handed to Amazon Textract's synchronous
+rasterized with pypdfium2 and handed to Amazon Textract's synchronous
 `DetectDocumentText`, yielding one `zone="ocr"` `ExtractedTextUnit` per page
 that carries the recognized page text plus per-word geometry.
 
 Why this exists
 ---------------
 
-Both test PDFs in this repository carry a broken font ToUnicode CMap, so the
-page *renders* `Patti、Martin、Christina` while `page.get_text("rawdict")`
-*reads* `Pa#、Mar&n、Chris&na`. The single-path pipeline therefore redacted 1
-of 3 names and still reported the Redaction Job `completed`. This module is
-the second, independent detection path: a ToUnicode defect breaks the text
-layer but not OCR, an OCR misread breaks OCR but not a clean text layer, and
-a scanned page has no text layer at all. To leak a PII value now, *both*
-paths must fail on that same value.
+A PDF can carry a broken font ToUnicode CMap, so a page *renders*
+`Patti、Martin、Christina` while its text layer *reads* `Pa#、Mar&n、Chris&na`.
+A single-path pipeline would redact 1 of 3 names and still report the
+Redaction Job `completed`. This module is the second, independent detection
+path: a ToUnicode defect breaks the text layer but not OCR, an OCR misread
+breaks OCR but not a clean text layer, and a scanned page has no text layer
+at all. To leak a PII value, *both* paths must fail on that same value.
 
 Relationship to `ocr.py`
 ------------------------
@@ -25,7 +23,7 @@ Relationship to `ocr.py`
 not reused here: it reads only `"LINE"`-level `Text` and discards
 `Geometry` entirely, because its consumer (`match_rules`) only needs the
 recognized string. This path needs `"WORD"` geometry, since an OCR-derived
-`MatchSpan` has no character rectangles to fall back on — the word list is
+`MatchSpan` has no character rectangles to fall back on - the word list is
 the only bridge from an offset in the unit's text back to a place on the
 page. The lazy-client pattern and Textract call style are reused; the block
 walk is not.
@@ -35,38 +33,39 @@ Interface decisions (they affect callers and tests)
 
 1. **This module raises.** Unlike `guardrails_pii_detect.py`, which swallows
    every failure because it only *supplements* the regex rules, the OCR_Path
-   is one of exactly two primary detection sources for a PDF — and the only
+   is one of exactly two primary detection sources for a PDF - and the only
    one that works when the text layer is corrupt. An OCR failure that
-   degraded silently would rebuild, one layer up, the exact defect this
-   feature removes: PII missing from the output while the Job reads
-   `completed`. So an unrecoverable per-page failure raises `OcrPathError`,
-   which `handle_job` lets reach its top-level handler, driving the Job to
-   `failed` with the page index in `errorMessage` and nothing stored
-   (Requirements 3.3-3.6). A loud failure is recoverable by re-uploading; a
-   silent one is not detectable at all.
+   degraded silently would rebuild the exact defect this path exists to
+   remove: PII missing from the output while the Job reads `completed`. So a
+   failure on any page raises `OcrPathError` instead of skipping the page,
+   and its message includes the failing page index. `handle_job` lets the
+   error reach its top-level handler, driving the Job to `failed` with the
+   page index in `errorMessage` and nothing stored. A loud failure is
+   recoverable by re-uploading; a silent one is not detectable at all.
 
-2. **One unit per page, always — even an empty one** (Requirement 1.1). A
-   page Textract recognized no words on still yields a unit with `text=""`.
-   That keeps `ocr:{index}` identical to the page index, so nothing
-   downstream needs a unit-index -> page-index map, and both detection tools
-   already skip empty text (`detect_pii_with_guardrails` checks
-   `if not unit.text`; `re.finditer` over `""` yields nothing). This
-   deliberately differs from `extraction_pdf.py`, which *drops*
-   whitespace-only pages — hence `text:{index}` is NOT a page index there and
-   `position.pageIndex` must be read instead.
+2. **One unit per page, always - even an empty one.** A page Textract
+   recognized no words on still yields a unit with `text=""`. That keeps
+   `ocr:{index}` identical to the page index, so nothing downstream needs a
+   unit-index -> page-index map, and both detection tools already skip empty
+   text (`detect_pii_with_guardrails` checks `if not unit.text`;
+   `re.finditer` over `""` yields nothing). This deliberately differs from
+   `extraction_pdf.py`, which *drops* whitespace-only pages - hence
+   `text:{index}` is NOT a page index there and `position.pageIndex` must be
+   read instead.
 
-3. **`page.rect`, not `page.mediabox`**, for the unit's `boundingBox`.
-   `page.rect` is rotation-aware and is exactly what `get_pixmap`
-   rasterizes, so the normalized Textract coordinates recorded on each
-   `OcrWord` are fractions *of this rectangle*. Using `mediabox` here would
-   silently mis-place every word on a `/Rotate 90` page.
+3. **The visible page size** (`page.get_size()`, which already accounts for
+   the page's `/Rotate`) is the unit's `boundingBox`. It is exactly the
+   area `page.render` rasterizes, so the normalized Textract coordinates
+   recorded on each `OcrWord` are fractions *of this rectangle*. Using the
+   unrotated media box here would silently mis-place every word on a
+   `/Rotate 90` page.
 
 4. **Normalized coordinates are stored raw.** `OcrWord.boundingBox` holds
-   Textract's `[0, 1]` fractions verbatim, NOT page points — see the
+   Textract's `[0, 1]` fractions verbatim, NOT page points - see the
    WARNING on `OcrWord` in `shared/models.py`. The redactor scales them onto
-   `page.rect` at redaction time, which keeps the page-size dependency in
+   the page size at redaction time, which keeps the page-size dependency in
    one place. Note the mapping is independent of the Raster_Resolution: the
-   rasterized image always covers the whole page rectangle, so dpi affects
+   rasterized image always covers the whole visible page, so dpi affects
    recognition quality and payload size only, never placement.
 
 5. **Word granularity is accepted.** Textract's smallest geometric unit is a
@@ -81,14 +80,17 @@ Interface decisions (they affect callers and tests)
    (`+86 138 0000 0000` reads back with its spaces intact and matches a
    pattern written for it). This is the mirror image of the Text_Layer_Path,
    which inserts no separators at all and therefore *joins* line-wrapped
-   values — a further reason to keep both paths.
+   values - a further reason to keep both paths.
 
 7. **Synchronous `DetectDocumentText`**, not `StartDocumentTextDetection`:
    it keeps the control flow a plain loop, matches the existing sync pattern
    in `ocr.py`, and avoids introducing a polling state machine. The
    trade-off is page-serial latency for multi-page documents.
 
-Requirements covered: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.1, 3.2, 3.3, 3.4, 4.7.
+8. **Bounded Textract effort per page.** Each page gets at most
+   `MAX_ATTEMPTS` Textract calls (one initial attempt plus retries on
+   transient errors). A page image over Textract's 10 MB synchronous limit
+   is re-rendered once at `FALLBACK_RASTER_DPI` (150 DPI) before the call.
 """
 from __future__ import annotations
 
@@ -97,7 +99,9 @@ import os
 import time
 from typing import List, Optional
 
-import fitz  # PyMuPDF
+import io
+
+import pypdfium2 as pdfium
 
 from agent.logging_config import describe_exception
 from shared.models import BoundingBox, ExtractedTextUnit, OcrWord, TextPosition
@@ -108,14 +112,14 @@ __all__ = ["OcrPathError", "ocr_pdf_pages"]
 
 #: Environment variable holding the Raster_Resolution, injected into the
 #: AgentCore Runtime by `infra/redaction_stack.py` alongside `GUARDRAIL_ID` /
-#: `GUARDRAIL_VERSION` (Requirement 4.7).
+#: `GUARDRAIL_VERSION`.
 RASTER_DPI_ENV_VAR = "PDF_OCR_DPI"
 
 #: Used when `PDF_OCR_DPI` is absent, blank, non-numeric, or outside
-#: `[MIN_RASTER_DPI, MAX_RASTER_DPI]` (Requirement 4.7).
+#: `[MIN_RASTER_DPI, MAX_RASTER_DPI]`.
 DEFAULT_RASTER_DPI = 200
 
-#: Re-render resolution for the oversized-image fallback (Requirement 3.2).
+#: Re-render resolution for the oversized-image fallback 
 FALLBACK_RASTER_DPI = 150
 
 MIN_RASTER_DPI = 72
@@ -124,7 +128,7 @@ MAX_RASTER_DPI = 400
 #: Textract's synchronous `DetectDocumentText` input size limit (10 MB).
 TEXTRACT_MAX_SYNC_BYTES = 10 * 1024 * 1024
 
-#: Total attempts per page (1 initial + 2 retries), per Requirement 3.1 and
+#: Total attempts per page (1 initial + 2 retries), and
 #: matching `guardrails_pii_detect.MAX_RETRIES`.
 MAX_ATTEMPTS = 3
 
@@ -141,7 +145,7 @@ _WORD_SEPARATOR = " "
 _LINE_SEPARATOR = "\n"
 
 #: `botocore` error codes treated as transient and therefore retryable
-#: (Requirement 3.1). Kept identical to
+#: (see `_is_retryable`). Kept identical to
 #: `guardrails_pii_detect._RETRYABLE_ERROR_CODES` minus the Bedrock-only
 #: `ModelTimeoutException`, plus Textract's own transient codes.
 _RETRYABLE_ERROR_CODES = frozenset(
@@ -172,13 +176,12 @@ class OcrPathError(Exception):
     Propagates out of `ocr_pdf_pages` to `handle_job`'s top-level handler,
     which drives the Redaction Job to `failed` with this message as
     `errorMessage` and stores no Redacted Document
-    (Requirements 3.3, 3.4, 3.5, 3.6).
+
 
     `pageIndex` is the failing 0-based source page index, or `None` when the
     failure was not attributable to one page (e.g. the document could not be
     opened at all). The page index is also interpolated into the message, so
-    a caller that only records `str(error)` still surfaces it
-    (Requirements 3.3, 3.4).
+    a caller that only records `str(error)` still surfaces it.
     """
 
     def __init__(self, reason: str, page_index: Optional[int] = None) -> None:
@@ -202,7 +205,7 @@ def _get_textract_client():
 
 
 def _read_raster_dpi() -> int:
-    """Resolve the Raster_Resolution from `PDF_OCR_DPI` (Requirement 4.7).
+    """Resolve the Raster_Resolution from `PDF_OCR_DPI`.
 
     Returns the parsed value when it is an integer inside
     `[MIN_RASTER_DPI, MAX_RASTER_DPI]`, and `DEFAULT_RASTER_DPI` otherwise —
@@ -211,7 +214,7 @@ def _read_raster_dpi() -> int:
     turn an obviously-wrong value (`5`, `100000`) into a plausible-looking
     one and hide the misconfiguration; falling back to a known-good default
     keeps the resolved value inside the range either way, which is what the
-    requirement actually constrains.
+    constraint actually requires.
     """
     raw_value = (os.environ.get(RASTER_DPI_ENV_VAR) or "").strip()
     if not raw_value:
@@ -242,19 +245,22 @@ def _read_raster_dpi() -> int:
     return dpi
 
 
-def _render_page_png(page: "fitz.Page", dpi: int) -> bytes:
-    """Rasterize `page`'s full rectangle to PNG bytes at `dpi`
-    (Requirement 1.2).
+def _render_page_png(page: "pdfium.PdfPage", dpi: int) -> bytes:
+    """Rasterize `page`'s full visible area to PNG bytes at `dpi`.
 
-    `page.get_pixmap(dpi=...)` rasterizes `page.rect`, which is
-    rotation-aware, so the resulting image covers exactly the rectangle the
-    recorded normalized word coordinates are relative to.
+    `page.render` applies the page's `/Rotate` and covers exactly the
+    rectangle `page.get_size()` reports, which is the rectangle the recorded
+    normalized word coordinates are relative to. The bitmap is encoded to PNG
+    with Pillow.
     """
-    return page.get_pixmap(dpi=dpi).tobytes("png")
+    image = page.render(scale=dpi / 72, draw_annots=True).to_pil()
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def _is_retryable(error: Exception) -> bool:
-    """Return True for throttling and 5xx service errors (Requirement 3.1).
+    """Return True for throttling and 5xx service errors.
 
     Reads `botocore`'s `ClientError.response` shape duck-typed (via
     `getattr`) rather than importing `botocore.exceptions`, exactly as
@@ -276,8 +282,7 @@ def _is_retryable(error: Exception) -> bool:
 
 def _detect_with_retry(client, png_bytes: bytes) -> dict:
     """Call `DetectDocumentText` for one page image, retrying transient
-    failures with exponential backoff up to `MAX_ATTEMPTS` total attempts
-    (Requirement 3.1).
+    failures with exponential backoff up to `MAX_ATTEMPTS` total attempts.
 
     Makes exactly `min(transient_failures + 1, MAX_ATTEMPTS)` attempts: a
     non-retryable error is re-raised immediately rather than burning
@@ -292,8 +297,7 @@ def _detect_with_retry(client, png_bytes: bytes) -> dict:
             is_last_attempt = attempt == MAX_ATTEMPTS - 1
             if not _is_retryable(error) or is_last_attempt:
                 raise
-            # `describe_exception`, not `error` (agent-log-delivery design.md
-            # "Component 4", Requirement 2.8). This call's request body *is*
+            # `describe_exception`, not `error`. This call's request body *is*
             # the rasterized page image (`Document={"Bytes": png_bytes}`), so a
             # botocore `ParamValidationError` quoting the offending parameter
             # would echo the page image into the log record through
@@ -314,23 +318,22 @@ def _detect_with_retry(client, png_bytes: bytes) -> dict:
     raise AssertionError("_detect_with_retry exhausted its loop without a result")
 
 
-def _detect_page_text(client, page: "fitz.Page", page_index: int, dpi: int) -> dict:
+def _detect_page_text(client, page: "pdfium.PdfPage", page_index: int, dpi: int) -> dict:
     """Rasterize `page` and return its `DetectDocumentText` response.
 
-    Applies the oversized-image fallback (Requirement 3.2): when the PNG
+    Applies the oversized-image fallback: when the PNG
     exceeds Textract's synchronous input limit, the page is re-rasterized
     once at `FALLBACK_RASTER_DPI` and called again. Re-rendering is skipped
     when the resolved dpi already equals `FALLBACK_RASTER_DPI`, since that
     would reproduce byte-identical output; the oversized bytes are sent and
     Textract's own rejection becomes the failure reason.
 
-    Raises `OcrPathError` when the page cannot be rasterized
-    (Requirement 3.4) or when recognition fails after the retries above
-    (Requirement 3.3).
+    Raises `OcrPathError` when the page cannot be rasterized or when
+    recognition fails after the retries above.
     """
     try:
         png_bytes = _render_page_png(page, dpi)
-    except Exception as error:  # noqa: BLE001 - PyMuPDF raises its own types
+    except Exception as error:  # noqa: BLE001 - pypdfium2 raises its own types
         raise OcrPathError(
             "could not rasterize page at {} dpi: {}".format(dpi, error),
             page_index=page_index,
@@ -348,7 +351,7 @@ def _detect_page_text(client, page: "fitz.Page", page_index: int, dpi: int) -> d
         )
         try:
             png_bytes = _render_page_png(page, FALLBACK_RASTER_DPI)
-        except Exception as error:  # noqa: BLE001 - PyMuPDF raises its own types
+        except Exception as error:  # noqa: BLE001 - pypdfium2 raises its own types
             raise OcrPathError(
                 "could not rasterize page at {} dpi: {}".format(
                     FALLBACK_RASTER_DPI, error
@@ -403,7 +406,7 @@ def _child_word_blocks(line_block: dict, blocks_by_id: dict) -> List[dict]:
 
 def _normalized_bounding_box(word_block: dict) -> Optional[BoundingBox]:
     """Return a `WORD` block's `Geometry.BoundingBox` as a `BoundingBox`,
-    keeping Textract's normalized `[0, 1]` values verbatim (decision 4), or
+    keeping Textract's normalized `[0, 1]` values verbatim (interface decision 4), or
     `None` when the block carries no usable geometry.
 
     A word without geometry cannot be placed on the page, and inventing a
@@ -426,10 +429,9 @@ def _normalized_bounding_box(word_block: dict) -> Optional[BoundingBox]:
 
 
 def _build_page_unit(
-    page: "fitz.Page", page_index: int, response: dict
+    page: "pdfium.PdfPage", page_index: int, response: dict
 ) -> ExtractedTextUnit:
-    """Assemble one page's OCR_Text_Unit from a `DetectDocumentText` response
-    (Requirements 1.1, 1.4, 1.5, 1.6).
+    """Assemble one page's OCR_Text_Unit from a `DetectDocumentText` response.
 
     Walks `LINE` blocks in Textract's returned order and, within each line,
     its child `WORD` blocks in the order the `CHILD` relationship lists
@@ -441,8 +443,7 @@ def _build_page_unit(
     Words are joined with a single space within a line and a single newline
     between lines. Those separator characters belong to NO word, so a span
     covering only separators resolves to zero rectangles, while a span
-    touching any part of a word resolves to that whole word
-    (Requirement 2.5).
+    touching any part of a word resolves to that whole word.
 
     Separators are emitted only *between* words that were actually recorded,
     so a line whose words were all unusable (empty text or missing
@@ -488,19 +489,25 @@ def _build_page_unit(
             offset += len(word_text)
             is_first_word_on_line = False
 
-    page_rect = page.rect
+    try:
+        page_width, page_height = page.get_size()
+    except Exception as error:  # noqa: BLE001 - pypdfium2 raises its own types
+        raise OcrPathError(
+            "could not read page size: {}".format(error), page_index=page_index
+        ) from error
+
     return ExtractedTextUnit(
         zone=_OCR_ZONE,
         # A page Textract recognized nothing on still gets a unit, with
-        # `text=""` (decision 2) - "Textract was consulted and found
+        # `text=""` (one unit per page, always) - "Textract was consulted and found
         # nothing" is a result, not a failure.
         text="".join(text_parts),
         position=TextPosition(index=page_index, pageIndex=page_index),
         boundingBox=BoundingBox(
-            left=page_rect.x0,
-            top=page_rect.y0,
-            width=page_rect.width,
-            height=page_rect.height,
+            left=0,
+            top=0,
+            width=page_width,
+            height=page_height,
         ),
         ocrWords=words,
     )
@@ -508,7 +515,7 @@ def _build_page_unit(
 
 def ocr_pdf_pages(file_bytes: bytes) -> List[ExtractedTextUnit]:
     """Recognize every page of a `.pdf` via Textract and return one
-    OCR_Text_Unit per page (Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6).
+    OCR_Text_Unit per page.
 
     Parameters
     ----------
@@ -521,28 +528,30 @@ def ocr_pdf_pages(file_bytes: bytes) -> List[ExtractedTextUnit]:
     List[ExtractedTextUnit]
         Exactly one unit per page, in page order, each with `zone="ocr"`,
         `position.pageIndex` equal to its own list index, `boundingBox` set
-        to the page rectangle, and `ocrWords` holding every recognized word's
+        to the visible page size, and `ocrWords` holding every recognized word's
         offset range and normalized bounding box. Pages Textract recognized
-        no words on still appear, with `text=""` (decision 2), so the
+        no words on still appear, with `text=""`, so the
         `ocr:{index}` Unit_Ref index *is* the page index.
 
     Raises
     ------
     OcrPathError
-        If the document cannot be opened, or if any page cannot be
-        rasterized or recognized. Nothing partial is returned: a caller
-        must not be able to mistake a degraded detection run for a clean one
-        (decision 1, Requirements 3.3-3.6).
+        If the document cannot be opened (corrupt, empty, or password
+        protected; `pageIndex` is `None`), or if any page cannot be
+        rasterized or recognized (`pageIndex` is that page's index and is
+        included in the message). Nothing partial is returned: a caller
+        must not be able to mistake a degraded detection run for a clean one.
     """
+    if not file_bytes:
+        raise OcrPathError("could not open PDF: empty document")
+
     try:
-        document = fitz.open(stream=file_bytes, filetype="pdf")
-    except Exception as error:  # noqa: BLE001 - PyMuPDF raises its own types
+        document = pdfium.PdfDocument(file_bytes)
+    except Exception as error:  # noqa: BLE001 - pypdfium2 raises its own types
+        # Covers corrupt input and a document that needs a user password.
         raise OcrPathError("could not open PDF: {}".format(error)) from error
 
     try:
-        if document.is_encrypted:
-            raise OcrPathError("PDF is encrypted and cannot be rasterized")
-
         dpi = _read_raster_dpi()
 
         try:
@@ -553,16 +562,19 @@ def ocr_pdf_pages(file_bytes: bytes) -> List[ExtractedTextUnit]:
             ) from error
 
         units: List[ExtractedTextUnit] = []
-        for page_index in range(document.page_count):
+        for page_index in range(len(document)):
             try:
-                page = document.load_page(page_index)
-            except Exception as error:  # noqa: BLE001 - PyMuPDF's own types
+                page = document[page_index]
+            except Exception as error:  # noqa: BLE001 - pypdfium2's own types
                 raise OcrPathError(
                     "could not load page: {}".format(error), page_index=page_index
                 ) from error
 
-            response = _detect_page_text(client, page, page_index, dpi)
-            units.append(_build_page_unit(page, page_index, response))
+            try:
+                response = _detect_page_text(client, page, page_index, dpi)
+                units.append(_build_page_unit(page, page_index, response))
+            finally:
+                page.close()
 
         return units
     finally:

@@ -3,7 +3,7 @@
 AgentCore deploys `backend/agent_bundle/package_clean/`, a directory that is
 **gitignored** and holds a full copy of the first-party packages (`agent/`,
 `shared/`) *plus* ~50 vendored third-party distributions (`boto3`, `botocore`,
-`pydantic`, `strands`, `mcp`, `fitz`, `docx`, `lxml`, ...). The vendored tail
+`pydantic`, `strands`, `mcp`, `pdfminer`, `pikepdf`, `pypdfium2`, `docx`, `lxml`, ...). The vendored tail
 is produced by whatever process builds the bundle; the first-party code was
 kept in sync by hand-run copies, and `scripts/sync_agent_entrypoint.py` synced
 only the single entrypoint file `main.py`.

@@ -76,7 +76,9 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from unittest.mock import patch
 
-import fitz  # PyMuPDF  # noqa: F401 - imported like Patti so a missing PyMuPDF fails collection loudly, matching the suite's other PDF tests
+import pdfminer  # noqa: F401 - imported like Patti so a missing PDF library fails collection loudly, matching the suite's other PDF tests
+import pikepdf  # noqa: F401
+import pypdfium2  # noqa: F401
 import pytest
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]

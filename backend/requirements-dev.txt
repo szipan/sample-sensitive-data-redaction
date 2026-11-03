@@ -7,3 +7,5 @@ moto==5.0.13
 # predated the AgentCore SDK being added to requirements.txt and now conflicts.
 # 1.43.66 resolves cleanly with moto 5.0.13 and strands 1.50.2; full suite green.
 boto3==1.43.66
+# Test-only PDF library (pymupdf-replacement spec); not a runtime dependency.
+pypdf==6.21.4

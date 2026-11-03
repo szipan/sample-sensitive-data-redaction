@@ -3,7 +3,7 @@
 # This is the runtime-only dependency closure for the Strands redaction agent
 # that ships inside `agent_bundle/` — deliberately SEPARATE from
 # `requirements.txt`, which also carries CDK build-time deps
-# (aws-cdk-lib / constructs). Only the five top-level runtime pins below belong
+# (aws-cdk-lib / constructs). Only the seven top-level runtime pins below belong
 # here; their transitive deps (pyyaml, mcp>=1.23.0, boto3/botocore, pydantic,
 # etc.) are resolved by pip from strands-agents 1.50.2 and are NOT listed
 # explicitly. aws-cdk-lib / constructs are build-time only and MUST NOT appear
@@ -18,9 +18,15 @@
 # in-image redaction (decode -> draw black rectangles -> re-encode). Pinned to
 # 11.0.0, which publishes cp312 aarch64 manylinux wheels
 # (`manylinux_2_28_aarch64` / `manylinux2014_aarch64`) so the builder can
-# cross-download it for Linux ARM64 / CPython 3.12 exactly like PyMuPDF; wheel
-# availability was verified against PyPI before pinning.
-PyMuPDF==1.28.0
+# cross-download it for Linux ARM64 / CPython 3.12; wheel availability was
+# verified against PyPI before pinning.
+#
+# PDF libraries: pdfminer.six is pure Python; pikepdf has a cp312
+# manylinux_2_28 aarch64 wheel; pypdfium2 has a py3-none manylinux2014 aarch64
+# wheel.
+pdfminer.six==20260107
+pikepdf==10.17.0
+pypdfium2==5.14.0
 python-docx==1.1.2
 Pillow==11.0.0
 strands-agents==1.50.2

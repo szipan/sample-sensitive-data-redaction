@@ -4,8 +4,8 @@
 
 For `.pdf` documents, PII detection becomes **two independent paths whose results are unioned**:
 
-1. **Text_Layer_Path** (existing, unchanged): `page.get_text("rawdict")` → one `ExtractedTextUnit` per page → regex rules + Bedrock Guardrails → spans resolved to per-character rectangles.
-2. **OCR_Path** (new): rasterize each page with PyMuPDF → Amazon Textract `DetectDocumentText` → one OCR_Text_Unit per page carrying the recognized text plus per-word geometry → the same regex rules + Guardrails → spans resolved through Textract word bounding boxes.
+1. **Text_Layer_Path** (existing, unchanged): `pdf_glyphs.collect_page_glyphs` → one `ExtractedTextUnit` per page → regex rules + Bedrock Guardrails → spans resolved to per-character rectangles.
+2. **OCR_Path** (new): rasterize each page with pypdfium2 → Amazon Textract `DetectDocumentText` → one OCR_Text_Unit per page carrying the recognized text plus per-word geometry → the same regex rules + Guardrails → spans resolved through Textract word bounding boxes.
 
 Both paths feed the same `MatchSpan` collection, and the same PDF redactor blacks out every rectangle either path produced.
 
@@ -26,7 +26,7 @@ To leak a PII value, both paths must fail on that same value. That is a material
 
 **OCR only, replacing the text layer.** Dominated by dual-path. Textract is the dominant cost in either design, and the text-layer pass is local CPU work, so discarding it saves almost nothing while giving up a free, independent signal. It also merely trades ToUnicode misses for OCR-misread misses — the text layer of a well-formed PDF is exact where OCR is probabilistic.
 
-**Health check on the text layer, with OCR as a conditional fallback.** The heuristic is the weak point. The signal available (`rawdict` character entries versus rendered glyph count — 19 versus 23 on `Patti.pdf`) does catch ligature collapse, but it misses other CMap defects such as a uniform codepoint shift, where counts match perfectly and every character is wrong. A heuristic false negative is silent and catastrophic, which is exactly the failure mode this feature exists to eliminate. The health signal is therefore still computed and **recorded as a diagnostic**, but never used to route (Requirement 5.5).
+**Health check on the text layer, with OCR as a conditional fallback.** The heuristic is the weak point. The signal available (glyph entries versus rendered glyph count — 19 versus 23 on `Patti.pdf`) does catch ligature collapse, but it misses other CMap defects such as a uniform codepoint shift, where counts match perfectly and every character is wrong. A heuristic false negative is silent and catastrophic, which is exactly the failure mode this feature exists to eliminate. The health signal is therefore still computed and **recorded as a diagnostic**, but never used to route (Requirement 5.5).
 
 ### What this feature deliberately does not do
 
@@ -47,8 +47,8 @@ The single place that must learn about the new namespace is the redactor, which 
 
 | `unitRef` prefix | Offset space | Rectangle source |
 |---|---|---|
-| `text:` | page's `rawdict` character traversal | `rawdict` per-character `bbox`, grouped per line |
-| `ocr:` | OCR page text | Textract `WORD` `Geometry.BoundingBox`, scaled to `page.rect` |
+| `text:` | page's `collect_page_glyphs` glyph traversal | per-glyph `bbox`, grouped per line |
+| `ocr:` | OCR page text | Textract `WORD` `Geometry.BoundingBox`, scaled to the page rectangle (Page_Coordinates) |
 | `image:` | `ImageRegion.recognizedText` | out of scope for PDF text-layer redaction (skipped today, unchanged) |
 
 The same PII value will often be redacted twice, once per path, with slightly different rectangles. Overlapping black boxes are harmless (Requirement 2.6).
@@ -58,7 +58,7 @@ The same PII value will often be redacted twice, once per path, with slightly di
 ```mermaid
 graph TD
     subgraph Redaction Agent handle_job
-        READ[Read source bytes from S3] --> EXT[extract_document_content<br/>rawdict text units + image regions]
+        READ[Read source bytes from S3] --> EXT[extract_document_content<br/>glyph text units + image regions]
         EXT --> IMGOCR[recognize_image_text<br/>embedded images only]
         EXT -->|.pdf only| PDFOCR[ocr_pdf_pages<br/>NEW: rasterize + Textract per page]
 
@@ -91,15 +91,15 @@ graph TD
 sequenceDiagram
     participant O as orchestration.handle_job
     participant P as ocr_pdf_pages
-    participant M as PyMuPDF
+    participant M as pypdfium2
     participant TX as Textract
 
     O->>P: ocr_pdf_pages(source_bytes)
     loop for each page
-        P->>M: page.get_pixmap(dpi=RASTER_DPI)
-        M-->>P: Pixmap -> PNG bytes
+        P->>M: PdfPage.render(scale=RASTER_DPI/72)
+        M-->>P: PIL bitmap -> PNG bytes
         alt PNG exceeds Textract sync size limit
-            P->>M: page.get_pixmap(dpi=150)
+            P->>M: PdfPage.render(scale=150/72)
             M-->>P: smaller PNG bytes
         end
         P->>TX: detect_document_text(Document={Bytes: png})
@@ -143,7 +143,7 @@ class OcrPathError(Exception):
 
 def ocr_pdf_pages(file_bytes: bytes) -> List[ExtractedTextUnit]:
     """One ExtractedTextUnit per page, in page order, zone="ocr",
-    position.pageIndex set, boundingBox = page.rect, ocrWords populated.
+    position.pageIndex set, boundingBox = page rectangle, ocrWords populated.
 
     Raises OcrPathError if any page cannot be rasterized or recognized.
     """
@@ -152,7 +152,7 @@ def ocr_pdf_pages(file_bytes: bytes) -> List[ExtractedTextUnit]:
 Internal helpers:
 
 - `_read_raster_dpi() -> int` — reads `PDF_OCR_DPI`, clamps to `[72, 400]`, defaults to 200 on absent/blank/non-numeric/out-of-range (Requirement 4.7).
-- `_render_page_png(page, dpi) -> bytes` — `page.get_pixmap(dpi=dpi).tobytes("png")`.
+- `_render_page_png(page, dpi) -> bytes` — `pypdfium2.PdfPage.render(scale=dpi/72).to_pil()` encoded as PNG.
 - `_detect_with_retry(client, png_bytes) -> dict` — retries throttling/5xx with exponential backoff, `MAX_ATTEMPTS` total (mirrors `guardrails_pii_detect._is_retryable`'s duck-typed error inspection so the module stays testable with a plain fake client).
 - `_build_page_unit(page, page_index, response) -> ExtractedTextUnit` — see below.
 
@@ -239,28 +239,28 @@ def redact_pdf_document(...) -> bytes:
 Rectangle collection becomes provenance-tagged. Existing text-layer resolution (`_resolve_unit_page_and_rect`, `_collect_page_chars`, `_get_char_rects_for_offset_range`, `_sub_rectangle_for_match`) is unchanged; a sibling resolver handles `ocr:`:
 
 ```python
-def _rects_for_ocr_span(page, unit: ExtractedTextUnit, span: MatchSpan) -> List[fitz.Rect]:
+def _rects_for_ocr_span(page, unit: ExtractedTextUnit, span: MatchSpan) -> List[Rect]:
     """Every Word_Block whose [startOffset, endOffset) intersects the span's
-    range, mapped from normalized coordinates onto page.rect."""
+    range, mapped from normalized coordinates onto the page rectangle."""
     rects = []
     for word in unit.ocrWords or []:
         if word.startOffset < span.endOffset and span.startOffset < word.endOffset:
-            rects.append(_normalized_bbox_to_page_rect(page.rect, word.boundingBox))
+            rects.append(_normalized_bbox_to_page_rect(page_rect, word.boundingBox))
     return rects
 ```
 
 **Coordinate mapping (Requirement 2.3).** Textract's `BoundingBox` is normalized to the *input image*, and the input image is a raster of the entire page rectangle, so the mapping is a pure scale by the page dimensions and is **independent of the Raster_Resolution**:
 
 ```python
-def _normalized_bbox_to_page_rect(page_rect: fitz.Rect, box: BoundingBox) -> fitz.Rect:
+def _normalized_bbox_to_page_rect(page_rect: Rect, box: BoundingBox) -> Rect:
     x0 = page_rect.x0 + box.left * page_rect.width
     y0 = page_rect.y0 + box.top  * page_rect.height
-    return fitz.Rect(x0, y0,
+    return Rect(x0, y0,
                      x0 + box.width  * page_rect.width,
                      y0 + box.height * page_rect.height)
 ```
 
-DPI affects recognition quality and payload size only, never placement. `page.get_pixmap()` rasterizes `page.rect`, which is already rotation-aware, and `page.add_redact_annot` consumes coordinates in that same space, so rotated pages stay consistent — verified by a dedicated unit test on a `/Rotate 90` page rather than by assumption.
+DPI affects recognition quality and payload size only, never placement. `PdfPage.render` rasterizes the page rectangle, which is already rotation-aware, and `pdf_content_edit` consumes coordinates in that same Page_Coordinates space, so rotated pages stay consistent — verified by a dedicated unit test on a `/Rotate 90` page rather than by assumption.
 
 Span → page resolution for `ocr:` spans uses `ocr_text_units[index].position.pageIndex` (which, per Component 1, equals `index`). An out-of-range index or a missing `pageIndex`/`ocrWords` raises `RedactionError`, matching how the text-layer resolver already treats a violated precondition.
 
@@ -400,7 +400,7 @@ class OcrWord:
     `text`. `boundingBox` holds Textract's NORMALIZED (0-1) coordinates
     relative to the rasterized page image — unlike every other BoundingBox in
     this module, which is in source-document coordinate space. The redactor
-    scales it onto `page.rect` at redaction time.
+    scales it onto the page rectangle at redaction time.
     """
     text: str
     startOffset: int
@@ -446,7 +446,7 @@ Both new model members are optional with defaults, so every existing constructor
 |---|---|---|
 | Textract `DetectDocumentText` | ~$0.0015 | $1.50 / 1000 pages; the dominant cost |
 | Bedrock Guardrails `ApplyGuardrail` | ~$0.0015 | $0.75 / 1000 text units × 2 units per page (text layer + OCR) |
-| PyMuPDF rasterization | CPU only | local, no service call |
+| pypdfium2 rasterization | CPU only | local, no service call |
 
 Dual-path doubles the Guardrails calls per page relative to today, which is small next to Textract — and Textract is a cost an OCR-only design would pay identically. Latency roughly doubles per page, with OCR the bottleneck; synchronous `DetectDocumentText` keeps that latency predictable, with no polling loop to reason about.
 
@@ -542,7 +542,7 @@ Synchronous `DetectDocumentText` was chosen over `StartDocumentTextDetection` be
 
 ### Property 15: The text layer is recorded verbatim
 
-*For any* PDF page, the text of that page's Text_Layer_Path unit equals the exact concatenation of the `c` values reported by `page.get_text("rawdict")` in traversal order, with no substitution, expansion, or separator insertion.
+*For any* PDF page, the text of that page's Text_Layer_Path unit equals the exact concatenation of the `c` values reported by `pdf_glyphs.collect_page_glyphs` in traversal order, with no substitution, expansion, or separator insertion.
 
 **Validates: Requirement 4.3**
 
@@ -631,7 +631,7 @@ Feature: pdf-dual-path-pii-detection, Property {number}: {property title}
 
 **External dependencies are always faked in property tests.** Textract and Bedrock Runtime are replaced with in-process fakes (following `backend/tests/test_ocr.py`'s `unittest.mock.patch` approach rather than moto, since moto's Textract stub cannot return configurable `Blocks`); DynamoDB uses a fake table or moto; S3 uses moto. No property test makes a real AWS call — 100 iterations × real Textract would be both slow and expensive, and would test AWS rather than this code.
 
-**PDF fixtures.** Generated in-memory with PyMuPDF (`fitz.open()` + `page.insert_text`) so page counts, content, and rotation are Hypothesis-controlled. The two real repository PDFs with the broken ToUnicode CMap serve as regression *examples*, not as property inputs — they pin the specific observed numbers (`Patti` 0% → covered, `pageHealth` reading 19 versus 23).
+**PDF fixtures.** Built in-memory with pypdf via `backend/tests/pdf_fixtures.py` so page counts, content, and rotation are Hypothesis-controlled. The two real repository PDFs with the broken ToUnicode CMap serve as regression *examples*, not as property inputs — they pin the specific observed numbers (`Patti` 0% → covered, `pageHealth` reading 19 versus 23).
 
 **Unit and integration tests** cover what property testing should not:
 
@@ -645,7 +645,7 @@ Feature: pdf-dual-path-pii-detection, Property {number}: {property title}
 | `textract:DetectDocumentText` grant (Req 4.6) | smoke | CDK template assertion, one execution |
 | Absent summary returns `null` (Req 5.7) | example | single concrete case |
 | Summary recorded on completion (Req 5.1) | example | implied by Properties 18–20 |
-| Rotated (`/Rotate 90`) page geometry | example | verifies the `page.rect` rotation assumption explicitly |
+| Rotated (`/Rotate 90`) page geometry | example | verifies the page-rectangle rotation assumption explicitly |
 | End-to-end `Patti.pdf` coverage | integration | one real document, real Textract, run deliberately |
 
 **The regression that matters most.** A dedicated integration test asserts that redacting `Patti.pdf` through the dual path yields rectangles covering `Patti`, `Martin`, and `Christina` — the three values the single-path pipeline covered at 0%, 0%, and 56.6%. Without this test the feature's premise is unverified.
