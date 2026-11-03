@@ -418,7 +418,7 @@ def test_jobs_table_has_ttl(template_json):
     }
 
 
-def test_agent_may_delete_only_source_documents(template_json):
+def test_agent_delete_permission_is_scoped(template_json):
     import json as _json
 
     policies = [
@@ -429,5 +429,10 @@ def test_agent_may_delete_only_source_documents(template_json):
     statements = policies[0]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
     delete = [s for s in statements if "s3:DeleteObject" in _json.dumps(s["Action"])]
     assert len(delete) == 1
-    assert "SourceDocumentsBucket" in _json.dumps(delete[0]["Resource"])
-    assert "OutputDocumentsBucket" not in _json.dumps(delete[0]["Resource"])
+    resources = _json.dumps(delete[0]["Resource"])
+    assert "SourceDocumentsBucket" in resources
+    # On the output bucket only detections.json may be deleted, never the
+    # redacted documents themselves.
+    assert "OutputDocumentsBucket" in resources
+    assert "/*/detections.json" in resources
+    assert '"/*"' not in resources.split("OutputDocumentsBucket", 1)[1].split("]", 1)[0]

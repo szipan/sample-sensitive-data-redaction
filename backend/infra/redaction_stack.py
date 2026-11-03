@@ -616,11 +616,15 @@ class RedactionStack(Stack):
                                 self.output_documents_bucket.arn_for_objects("*"),
                             ],
                         ),
-                        # Source documents are removed once a job completes.
+                        # Source documents are removed once a job completes,
+                        # and detection results once the job leaves review.
                         iam.PolicyStatement(
                             actions=["s3:DeleteObject"],
                             resources=[
                                 self.source_documents_bucket.arn_for_objects("*"),
+                                self.output_documents_bucket.arn_for_objects(
+                                    "*/detections.json"
+                                ),
                             ],
                         ),
                         iam.PolicyStatement(

@@ -46,3 +46,31 @@ def test_delete_source_document_never_raises(monkeypatch):
     monkeypatch.setattr(orchestration, "_get_s3_client", lambda: s3)
     monkeypatch.setenv("SOURCE_BUCKET_NAME", "src")
     orchestration._delete_source_document("j/a.pdf")
+
+
+def test_failure_message_never_contains_exception_text():
+    from agent.tools.extraction_pdf import ExtractionError
+
+    msg = orchestration._failure_message(ExtractionError("John Smith 123-45-6789"))
+    assert msg == "Processing failed (ExtractionError)"
+
+
+def test_failure_message_keeps_orchestration_error_text():
+    exc = orchestration.OrchestrationError("Unsupported source extension: '.txt'")
+    assert orchestration._failure_message(exc) == str(exc)
+
+
+def test_delete_detections_removes_object(monkeypatch):
+    s3 = MagicMock()
+    monkeypatch.setattr(orchestration, "_get_s3_client", lambda: s3)
+    monkeypatch.setenv("OUTPUT_BUCKET_NAME", "out")
+    orchestration._delete_detections("j")
+    s3.delete_object.assert_called_once_with(Bucket="out", Key="j/detections.json")
+
+
+def test_delete_detections_never_raises(monkeypatch):
+    s3 = MagicMock()
+    s3.delete_object.side_effect = RuntimeError("denied")
+    monkeypatch.setattr(orchestration, "_get_s3_client", lambda: s3)
+    monkeypatch.setenv("OUTPUT_BUCKET_NAME", "out")
+    orchestration._delete_detections("j")

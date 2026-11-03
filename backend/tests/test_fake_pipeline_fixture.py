@@ -80,7 +80,8 @@ def test_pdf_job_fails_when_textract_raises_and_the_page_ocr_ran(
 ):
     """The documented asymmetry: `ocr_pdf_pages` is a primary path, so a
     Textract failure drives the Job to `failed` rather than degrading it, and
-    the marker lands in the Job's DynamoDB `errorMessage` — not in a record."""
+    the exception text reaches neither the Job's `errorMessage` nor a log
+    record: the stored message names only the 1-based page."""
     captured = log_capture()
     markers = PlantedMarkers()
 
@@ -92,7 +93,8 @@ def test_pdf_job_fails_when_textract_raises_and_the_page_ocr_ran(
     # exhaustion — which is what reaches `ocr_pdf.py`'s retry warning, the
     # only Textract log site `describe_exception` feeds.
     assert len(run.textract_calls) == 3
-    assert run.error_message and markers.exception_message in run.error_message
+    assert run.error_message == "OCR failed on page 1"
+    assert markers.exception_message not in run.error_message
     assert captured.entries()
 
 

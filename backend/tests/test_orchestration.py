@@ -244,7 +244,7 @@ def test_extraction_error_marks_failed_and_skips_downstream():
     pipeline.mocks["update_job_status"].assert_called_once_with(
         JOB_ID,
         orchestration.STATUS_FAILED,
-        error_message="corrupt .docx",
+        error_message="Processing failed (ExtractionError)",
         error_code=orchestration.ERROR_PROCESSING_FAILED,
     )
 
@@ -282,7 +282,7 @@ def test_unexpected_exception_midpipeline_marks_failed_never_stuck_processing():
     pipeline.mocks["update_job_status"].assert_called_once_with(
         JOB_ID,
         orchestration.STATUS_FAILED,
-        error_message="boom during redaction",
+        error_message="Processing failed (RuntimeError)",
         error_code=orchestration.ERROR_PROCESSING_FAILED,
     )
 
@@ -302,7 +302,7 @@ def test_store_failure_marks_failed():
     pipeline.mocks["update_job_status"].assert_called_once_with(
         JOB_ID,
         orchestration.STATUS_FAILED,
-        error_message="s3 write failed",
+        error_message="Processing failed (RuntimeError)",
         error_code=orchestration.ERROR_PROCESSING_FAILED,
     )
 
@@ -541,8 +541,9 @@ def test_ocr_path_error_fails_job_with_page_index_and_stores_nothing():
     pipeline.mocks["update_job_status"].assert_called_once()
     args, kwargs = pipeline.mocks["update_job_status"].call_args
     assert args == (JOB_ID, orchestration.STATUS_FAILED)
-    assert "page 2" in kwargs["error_message"]
-    assert "Textract failed" in kwargs["error_message"]
+    # The stored message names the 1-based page only, never the error text.
+    assert kwargs["error_message"] == "OCR failed on page 3"
+    assert "Textract failed" not in kwargs["error_message"]
     # The UI gets a machine-readable code plus the 1-based page number.
     assert kwargs["error_code"] == orchestration.ERROR_OCR_PAGE_FAILED
     assert kwargs["error_params"] == {"page": 3}
@@ -1019,7 +1020,7 @@ def test_property10_image_manipulation_failure_fails_the_job(
     pipeline.mocks["update_job_status"].assert_called_once_with(
         JOB_ID,
         orchestration.STATUS_FAILED,
-        error_message=exc_message,
+        error_message="Processing failed (RedactionError)",
         error_code=orchestration.ERROR_PROCESSING_FAILED,
     )
 
@@ -1247,3 +1248,57 @@ def test_handle_job_default_both_policy_keeps_guardrails_address():
         contributing.update(span.mergedFromRuleNames or [span.ruleName])
     assert "guardrails:ADDRESS" in contributing
     assert "guardrails:NAME" in contributing
+
+
+# ---------------------------------------------------------------------------
+# Review mode: detections.json (matched values + context) is deleted once the
+# Job leaves `detected`, whatever the outcome.
+# ---------------------------------------------------------------------------
+def _review_job():
+    job = _make_job()
+    job.mode = "review"
+    return job
+
+
+def _run_review(confirmed, monkeypatch, redact_error=None):
+    monkeypatch.setenv(orchestration.OUTPUT_BUCKET_NAME_ENV_VAR, "out")
+    monkeypatch.setenv(orchestration.SOURCE_BUCKET_NAME_ENV_VAR, "src")
+    s3 = MagicMock()
+    with _Pipeline(_review_job(), _content(), VerificationResult.success()) as pipeline, \
+            patch.object(orchestration, "_get_s3_client", return_value=s3), \
+            patch.object(orchestration, "build_detection_results", return_value=[]), \
+            patch.object(orchestration, "to_json_dict", return_value=[]), \
+            patch.object(orchestration, "poll_for_confirmation", return_value=confirmed), \
+            patch.object(orchestration, "filter_spans_by_selections", return_value=[]):
+        if redact_error is not None:
+            pipeline.mocks["_redact_document"].side_effect = redact_error
+        orchestration.handle_job(JOB_ID)
+    keys = [c.kwargs["Key"] for c in s3.delete_object.call_args_list]
+    return pipeline, keys
+
+
+def test_review_completed_deletes_detections_and_source(monkeypatch):
+    pipeline, keys = _run_review([1], monkeypatch)
+    assert "{}/detections.json".format(JOB_ID) in keys
+    assert "{}/source.docx".format(JOB_ID) in keys
+
+
+def test_review_timeout_deletes_detections(monkeypatch):
+    pipeline, keys = _run_review(None, monkeypatch)
+    assert keys == ["{}/detections.json".format(JOB_ID)]
+    pipeline.mocks["_redact_document"].assert_not_called()
+
+
+def test_review_failure_deletes_detections_keeps_source(monkeypatch):
+    pipeline, keys = _run_review([1], monkeypatch, redact_error=RuntimeError("x"))
+    assert keys == ["{}/detections.json".format(JOB_ID)]
+
+
+def test_auto_mode_never_touches_detections(monkeypatch):
+    monkeypatch.setenv(orchestration.SOURCE_BUCKET_NAME_ENV_VAR, "src")
+    s3 = MagicMock()
+    with _Pipeline(_make_job(), _content(), VerificationResult.success()), \
+            patch.object(orchestration, "_get_s3_client", return_value=s3):
+        orchestration.handle_job(JOB_ID)
+    keys = [c.kwargs["Key"] for c in s3.delete_object.call_args_list]
+    assert keys == ["{}/source.docx".format(JOB_ID)]

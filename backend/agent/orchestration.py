@@ -208,6 +208,44 @@ def _delete_source_document(source_key: str) -> None:
         )
 
 
+def _delete_detections(job_id: str) -> None:
+    """Remove `{jobId}/detections.json` (matched values and context snippets)
+    once the Job has left `detected`. Best effort: a failure is logged and
+    left to the bucket's lifecycle expiry."""
+    try:
+        _get_s3_client().delete_object(
+            Bucket=os.environ[OUTPUT_BUCKET_NAME_ENV_VAR],
+            Key=f"{job_id}/detections.json",
+        )
+    except Exception as exc:  # noqa: BLE001 - cleanup must not change the Job outcome
+        logger.warning(
+            "Could not delete detections for Job %s: %s",
+            job_id,
+            type(exc).__name__,
+        )
+
+
+def _cause_type(exc: BaseException) -> str:
+    """Type name of the exception's cause, for logs. Only type names are
+    logged here: even this module's own errors wrap third-party messages
+    (a Textract parameter error can quote the page image)."""
+    cause = exc.__cause__ or exc.__context__
+    return type(cause).__name__ if cause is not None else "none"
+
+
+def _failure_message(exc: BaseException) -> str:
+    """The `errorMessage` stored on a failed Job.
+
+    The Job record is readable through the API and outlives the run, so it
+    holds only the exception type (plus the audited extension message of
+    `OrchestrationError`). Exception text from document libraries can quote
+    the document itself, so it is stored neither here nor in the logs.
+    """
+    if isinstance(exc, OrchestrationError):
+        return str(exc)
+    return "Processing failed ({})".format(type(exc).__name__)
+
+
 def _load_enabled_rules() -> List[RedactionRule]:
     """Load every stored Redaction Rule and return only the enabled ones."""
     return [rule for rule in RulesRepository().get_all() if rule.enabled]
@@ -516,6 +554,9 @@ def handle_job(job_id: str) -> None:
             job.status,
         )
         return
+    # Set once detections.json (matched values + context) has been written;
+    # it is deleted again when the Job leaves `detected`, whatever the outcome.
+    detections_written = False
     try:
         source_bytes = _read_source_bytes(job.sourceKey)
 
@@ -684,6 +725,7 @@ def handle_job(job_id: str) -> None:
                 Key=f"{job_id}/detections.json",
                 Body=detections_json.encode("utf-8"),
             )
+            detections_written = True
 
             # Transition job status to "detected" so the frontend can
             # display the review UI.
@@ -776,25 +818,41 @@ def handle_job(job_id: str) -> None:
     except OcrPathError as exc:
         # The OCR_Path is a primary `.pdf` source, so its failure fails the
         # Job (see the call site). The failing page, when known, is reported
-        # to the UI as a 1-based number.
+        # to the UI as a 1-based number. The stored message names only the
+        # page: the error text can embed a third-party error message.
+        logger.error(
+            "Job %s: OCR path failed (page %s, cause %s)",
+            job_id,
+            exc.pageIndex,
+            _cause_type(exc),
+        )
         if exc.pageIndex is None:
             update_job_status(
-                job_id, STATUS_FAILED, error_message=str(exc), error_code=ERROR_OCR_FAILED
+                job_id,
+                STATUS_FAILED,
+                error_message="OCR failed",
+                error_code=ERROR_OCR_FAILED,
             )
         else:
             update_job_status(
                 job_id,
                 STATUS_FAILED,
-                error_message=str(exc),
+                error_message="OCR failed on page {}".format(exc.pageIndex + 1),
                 error_code=ERROR_OCR_PAGE_FAILED,
                 error_params={"page": exc.pageIndex + 1},
             )
     except Exception as exc:  # noqa: BLE001 - top-level catch-all is intentional
         # Top-level catch-all: every unexpected error becomes a `failed` status,
         # so a Job is never left stuck in `processing`.
+        logger.error(
+            "Job %s failed: %s (cause %s)", job_id, type(exc).__name__, _cause_type(exc)
+        )
         update_job_status(
             job_id,
             STATUS_FAILED,
-            error_message=str(exc),
+            error_message=_failure_message(exc),
             error_code=ERROR_PROCESSING_FAILED,
         )
+    finally:
+        if detections_written:
+            _delete_detections(job_id)
