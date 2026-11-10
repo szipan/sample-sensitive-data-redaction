@@ -25,10 +25,10 @@ classifier fields of the `*.dist-info/METADATA` installed in `backend/.venv`
 | pikepdf | 10.17.0 | MPL-2.0 | requirements.txt, agent-runtime-requirements.txt |
 | pypdfium2 | 5.14.0 | BSD-3-Clause | requirements.txt, agent-runtime-requirements.txt |
 | python-docx | 1.1.2 | MIT | requirements.txt, agent-runtime-requirements.txt |
-| Pillow | 11.0.0 | MIT-CMU | requirements.txt, agent-runtime-requirements.txt |
+| Pillow | 13.0.0 | MIT-CMU | requirements.txt, agent-runtime-requirements.txt |
 | strands-agents | 1.50.2 | Apache-2.0 | requirements.txt, agent-runtime-requirements.txt |
 | bedrock-agentcore | 1.20.0 | Apache-2.0 | requirements.txt, agent-runtime-requirements.txt |
-| pytest | 8.3.3 | MIT | requirements-dev.txt |
+| pytest | 9.2.0 | MIT | requirements-dev.txt |
 | hypothesis | 6.112.1 | MPL-2.0 | requirements-dev.txt |
 | moto | 5.0.13 | Apache-2.0 | requirements-dev.txt |
 | boto3 | 1.43.66 | Apache-2.0 | requirements-dev.txt |
@@ -49,11 +49,11 @@ pikepdf and hypothesis, which are MPL-2.0 (Weak_Copyleft_License, see section 3)
 ## 2. Native libraries bundled inside wheels
 
 Versions below are those in the wheels used for the Linux ARM64 / CPython 3.12
-AgentCore runtime. File lists and license texts were re-checked against the
-wheels installed in `backend/.venv` (pikepdf and Pillow: Linux x86_64 wheels
-with the same library set; pypdfium2: the `py3-none` wheel whose bundled
-license data is under `licenses/data/linux_x64/BUILD_LICENSES`, with the same
-component list as the ARM64 build).
+AgentCore runtime. File lists and license texts were re-checked against these
+wheels: pikepdf, a Linux x86_64 wheel with the same library set; Pillow, the
+Linux ARM64 wheel itself; pypdfium2, the `py3-none` wheel whose bundled license
+data is under `licenses/data/linux_x64/BUILD_LICENSES`, with the same component
+list as the ARM64 build.
 
 ### 2.1 pikepdf 10.17.0
 
@@ -96,30 +96,48 @@ wheel (`licenses/data/<platform>/BUILD_LICENSES/`):
 pypdfium2's documentation and examples are CC-BY-4.0 (`LICENSES/CC-BY-4.0.txt`);
 they are not executable code.
 
-### 2.3 Pillow 11.0.0
+### 2.3 Pillow 13.0.0
 
-Libraries in `pillow.libs/` of the wheel, matched section by section against
-the wheel's `pillow-11.0.0.dist-info/LICENSE`:
+Libraries in `pillow.libs/` of the wheel
+`pillow-13.0.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl`
+(the Linux ARM64 / CPython 3.12 wheel bundled for the AgentCore runtime),
+matched section by section against the wheel's
+`pillow-13.0.0.dist-info/licenses/LICENSE` and its CycloneDX SBOM
+`pillow-13.0.0.dist-info/sboms/`):
 
 | Component | File in `pillow.libs/` | License (SPDX) |
 | --- | --- | --- |
-| brotli (common, dec) | `libbrotlicommon-*.so.1`, `libbrotlidec-*.so.1` | MIT |
-| FreeType | `libfreetype-*.so.6.20.1` | FTL OR GPL-2.0-or-later (FTL elected) |
-| HarfBuzz | `libharfbuzz-*.so.0` | MIT (HarfBuzz "Old MIT" license) |
-| Little CMS 2 | `liblcms2-*.so.2.0.16` | MIT |
+| brotli (common, dec) | `libbrotlicommon-*.so.1.2.0`, `libbrotlidec-*.so.1.2.0` | MIT |
+| FreeType | `libfreetype-*.so.6.20.6` | FTL OR GPL-2.0-or-later (FTL elected) |
+| HarfBuzz | `libharfbuzz-*.so.0.61450.0` | MIT (HarfBuzz "Old MIT" license) |
+| Little CMS 2 | `liblcms2-*.so.2.0.19` | MIT |
+| libavif, with the AV1 codecs aom and dav1d and libyuv linked into it | `libavif-*.so.16.4.2` | libavif: BSD-2-Clause; aom: BSD-2-Clause; dav1d: BSD-2-Clause; libyuv: BSD-3-Clause |
 | libjpeg(-turbo) | `libjpeg-*.so.62.4.0` | IJG AND BSD-3-Clause AND Zlib |
-| liblzma (XZ Utils) | `liblzma-*.so.5.6.3` | Public domain (the LICENSE section states "liblzma is in the public domain") |
-| libpng | `libpng16-*.so.16.44.0` | libpng-2.0 |
-| libtiff | `libtiff-*.so.6.0.2` | libtiff |
-| libwebp, libwebpmux, libwebpdemux, libsharpyuv | `libwebp-*.so.7.1.9`, `libwebpmux-*.so.3.1.0`, `libwebpdemux-*.so.2.0.15`, `libsharpyuv-*.so.0.1.0` | BSD-3-Clause |
-| OpenJPEG | `libopenjp2-*.so` | BSD-2-Clause |
+| liblzma (XZ Utils) | `liblzma-*.so.5.8.4` | Public domain (the LICENSE section states "liblzma is in the public domain") |
+| libpng | `libpng16-*.so.16.58.0` | libpng-2.0 |
+| libtiff | `libtiff-*.so.6.3.0` | libtiff |
+| libwebp, libwebpmux, libwebpdemux, libsharpyuv | `libwebp-*.so.7.2.0`, `libwebpmux-*.so.3.1.2`, `libwebpdemux-*.so.2.0.17`, `libsharpyuv-*.so.0.1.2` | BSD-3-Clause |
+| OpenJPEG | `libopenjp2-*.so.2.5.4` | BSD-2-Clause |
+| Zstandard | `libzstd-*.so.1.5.7` | BSD-3-Clause (the LICENSE section carries the BSD terms) |
 | libXau | `libXau-*.so.6.0.0` | MIT-style (The Open Group permission notice) |
 | libxcb | `libxcb-*.so.1.1.0` | X11 (XCB license) |
 
-The Pillow `LICENSE` file also contains sections for BZIP2, Raqm and XDMCP;
-no corresponding shared library is present in `pillow.libs/` of this wheel.
-All Pillow components above are Permissive_License terms; the full texts are in
-the wheel's `pillow-11.0.0.dist-info/LICENSE`.
+Optional components listed in the SBOM that are not part of this wheel:
+
+- libimagequant (GPL-3.0-or-later): marked optional in the SBOM. No
+  `libimagequant` library is in `pillow.libs/`, and the compiled modules
+  contain none of its API symbols `liq_*`), so it is not linked.
+- FriBiDi (LGPL-2.1-or-later): marked optional in the SBOM. Pillow ships only
+  a small runtime-loading shim `fribidi-shim`, MIT-CMU) that loads a system
+  `libfribidi` if one is installed. No FriBiDi library is bundled, and this
+  project does not install one.
+
+The Pillow `LICENSE` file also contains sections for components that have no
+corresponding shared library in `pillow.libs/` of this wheel (for example
+BZIP2, Raqm and XDMCP).
+
+All bundled Pillow components above are Permissive_License terms; the full
+texts are in the wheel's `pillow-13.0.0.dist-info/licenses/LICENSE`.
 
 ## 3. Weak_Copyleft_License dependencies (MPL-2.0)
 

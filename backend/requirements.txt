@@ -19,15 +19,15 @@ pypdfium2==5.14.0
 python-docx==1.1.2
 # Pillow (import name `PIL`): used by agent/tools/redaction_image.py for
 # in-image redaction -- decode an embedded image, draw filled black rectangles
-# over detected PII, and re-encode it in the same format. Pinned to 11.0.0,
-# which publishes cp312 aarch64 manylinux wheels (`manylinux_2_28_aarch64` and
-# `manylinux2014_aarch64`), matching the Linux ARM64 / CPython 3.12 platforms
-# that scripts/build_agent_bundle.py cross-downloads for the AgentCore runtime.
-# Wheel availability was verified against
-# PyPI with `pip download --only-binary=:all: --python-version 312
-# --implementation cp --platform manylinux_2_28_aarch64` before pinning, and
-# 11.0.0 is import-verified in backend/.venv (`import PIL` succeeds).
-Pillow==11.0.0
+# over detected PII, and re-encode it in the same format. Pinned to 13.0.0,
+# which has no known vulnerabilities at the time of pinning (11.0.0 was
+# affected by many advisories, including GHSA-cfh3-3jmp-rvhc) and publishes a
+# cp312 `manylinux_2_28_aarch64` wheel, matching the Linux ARM64 / CPython 3.12
+# platforms that scripts/build_agent_bundle.py cross-downloads for the
+# AgentCore runtime. Wheel availability was verified against PyPI with
+# `pip download --only-binary=:all: --python-version 312 --implementation cp
+# --platform manylinux_2_28_aarch64` before pinning.
+Pillow==13.0.0
 
 # AgentCore Redaction Agent runtime dependencies (task 18.2).
 # - bedrock-agentcore: Amazon Bedrock AgentCore Runtime SDK, imported as

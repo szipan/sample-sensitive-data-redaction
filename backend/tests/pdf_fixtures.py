@@ -414,11 +414,13 @@ class EncryptionSpec:
     algorithm: str = "AES-128"
 
 
+# The passwords below are dummy values used only to build encrypted test
+# PDFs in memory. They are not credentials for any system.
 #: Opens without a password; the owner password only governs permissions.
-OWNER_ONLY = EncryptionSpec(user_password="", owner_password="owner-secret")
+OWNER_ONLY = EncryptionSpec(user_password="", owner_password="owner-secret")  # gitleaks:allow
 #: Needs the user password ("user-secret") to open.
 USER_REQUIRED = EncryptionSpec(
-    user_password="user-secret", owner_password="owner-secret"
+    user_password="user-secret", owner_password="owner-secret"  # gitleaks:allow
 )
 
 

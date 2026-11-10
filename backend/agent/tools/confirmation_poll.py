@@ -65,7 +65,8 @@ def poll_for_confirmation(job_id: str) -> Optional[List[int]]:
 
     elapsed = 0
     while elapsed < POLL_TIMEOUT_SECONDS:
-        time.sleep(POLL_INTERVAL_SECONDS)
+        # Deliberate fixed polling interval while waiting for the user's review.
+        time.sleep(POLL_INTERVAL_SECONDS)  # nosemgrep: arbitrary-sleep
         elapsed += POLL_INTERVAL_SECONDS
 
         item = _get_jobs_table().get_item(Key={"jobId": job_id}).get("Item")

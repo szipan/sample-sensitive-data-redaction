@@ -250,7 +250,7 @@ def test_write_back_renders_black_and_drops_original_data(variant):
 
     region, _ = _render_region(out_bytes, placement)
     assert region.size[0] > 0 and region.size[1] > 0
-    assert set(region.getdata()) == {(0, 0, 0)}
+    assert set(region.get_flattened_data()) == {(0, 0, 0)}
 
 
 def test_write_back_removes_existing_smask_when_replacement_is_opaque():

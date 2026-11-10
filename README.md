@@ -124,7 +124,7 @@ python3.12 -m venv .venv
 | `pdfminer.six` | 20260107 | MIT | PDF 文本与字符坐标提取 |
 | `pikepdf` | 10.17.0 | MPL-2.0(wheel 内捆绑 qpdf,Apache-2.0 等) | PDF 结构读写与内容流脱敏 |
 | `pypdfium2` | 5.14.0 | BSD-3-Clause(PDFium 及其捆绑组件的许可证见 `THIRD-PARTY-LICENSES`) | PDF 页面渲染 |
-| `Pillow` | 11.0.0 | MIT-CMU(HPND) | 图片解码、遮盖与重新编码 |
+| `Pillow` | 13.0.0 | MIT-CMU(HPND) | 图片解码、遮盖与重新编码 |
 | `pypdf` | 6.21.4 | BSD-3-Clause | 仅开发/测试使用,不进入 bundle |
 | `hypothesis` | 6.112.1 | MPL-2.0 | 仅开发/测试使用,不进入 bundle |
 
@@ -311,7 +311,7 @@ ENV
 npm run dev            # 默认 http://localhost:5173
 ```
 
-地址必须是 `https://`,非 HTTPS 会在构造时被拒绝。缺少 `VITE_COGNITO_REGION` 或 `VITE_COGNITO_CLIENT_ID` 时应用启动即报错。生产构建中缺少 `VITE_API_BASE_URL` 会直接失败(故意不回退到 localhost)。**不要把真实 API 地址提交进 `.env.*` 文件。**
+地址必须是 `https://`,非 HTTPS 会在构造时被拒绝。缺少 `VITE_COGNITO_REGION` 或 `VITE_COGNITO_CLIENT_ID` 时应用启动即报错。缺少 `VITE_API_BASE_URL` 时生产构建本身仍会成功,但构建出的应用在加载时会直接报错(故意不回退到 localhost),所以请在构建时设置该变量。**不要把真实 API 地址提交进 `.env.*` 文件。**
 
 ### 生产构建
 

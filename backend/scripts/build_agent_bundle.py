@@ -137,7 +137,11 @@ def _reset_dir(path: Path) -> None:
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     print("\n$ " + " ".join(cmd))
-    return subprocess.run(cmd, cwd=str(BACKEND_DIR))
+    # `cmd` is always an argument list built in this script from constants and
+    # repository paths (pip / the sync script); it never contains external
+    # input, and no shell is involved (shell=False, the default). This is a
+    # developer-run build script, not part of the deployed application.
+    return subprocess.run(cmd, cwd=str(BACKEND_DIR))  # nosemgrep: dangerous-subprocess-use-audit
 
 
 # --- Stage (a): download aarch64 cp312 wheels ------------------------------
@@ -386,8 +390,8 @@ def print_summary(install_method: str) -> None:
         "mcp-1.2",
         "PyYAML-6",
         "pyyaml-6",
-        "pillow-11.0.0",
-        "Pillow-11.0.0",
+        "pillow-13.0.0",
+        "Pillow-13.0.0",
     ]
     print("\nKey wheels in deps/:")
     for prefix in key_prefixes:

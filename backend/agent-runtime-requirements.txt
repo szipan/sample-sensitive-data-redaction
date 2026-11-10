@@ -16,8 +16,9 @@
 #
 # Pillow (import name `PIL`) is used by agent/tools/redaction_image.py for
 # in-image redaction (decode -> draw black rectangles -> re-encode). Pinned to
-# 11.0.0, which publishes cp312 aarch64 manylinux wheels
-# (`manylinux_2_28_aarch64` / `manylinux2014_aarch64`) so the builder can
+# 13.0.0, which has no known vulnerabilities at the time of pinning (11.0.0
+# was affected by many advisories, including GHSA-cfh3-3jmp-rvhc) and
+# publishes a cp312 `manylinux_2_28_aarch64` wheel, so the builder can
 # cross-download it for Linux ARM64 / CPython 3.12; wheel availability was
 # verified against PyPI before pinning.
 #
@@ -28,6 +29,6 @@ pdfminer.six==20260107
 pikepdf==10.17.0
 pypdfium2==5.14.0
 python-docx==1.1.2
-Pillow==11.0.0
+Pillow==13.0.0
 strands-agents==1.50.2
 bedrock-agentcore==1.20.0
