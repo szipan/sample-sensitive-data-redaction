@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LOCAL_DEV_BASE_URL, resolveApiBaseUrl } from './apiConfig'
+import { DEFAULT_LOCAL_DEV_BASE_URL, resolveApiBaseUrl, resolveCognitoConfig } from './apiConfig'
 import { createApiClient, toHttpsBaseUrl } from './client'
 
 /**
@@ -91,5 +91,22 @@ describe('resolved base URL still enforces HTTPS', () => {
 
   it('the localhost dev default is itself https://', () => {
     expect(toHttpsBaseUrl(DEFAULT_LOCAL_DEV_BASE_URL)).toBe(DEFAULT_LOCAL_DEV_BASE_URL)
+  })
+})
+
+describe('resolveCognitoConfig', () => {
+  it('returns trimmed values', () => {
+    expect(resolveCognitoConfig({ region: ' us-west-2 ', clientId: ' abc ' })).toEqual({
+      region: 'us-west-2',
+      clientId: 'abc',
+    })
+  })
+
+  it.each([
+    [{ region: undefined, clientId: 'abc' }],
+    [{ region: 'us-west-2', clientId: '' }],
+    [{ region: 'not a region', clientId: 'abc' }],
+  ])('rejects %j', (env) => {
+    expect(() => resolveCognitoConfig(env)).toThrow()
   })
 })

@@ -29,11 +29,16 @@ API Gateway HTTP API:
   real handler. The shared placeholder Lambda (`lambdas/placeholder.py`) is
   still defined but unused by any route; removing it is out of scope here.
 """
-from aws_cdk import CustomResource, Duration, RemovalPolicy, Stack
+import re
+from typing import Optional
+
+from aws_cdk import CfnOutput, CustomResource, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_apigatewayv2 as apigwv2
+from aws_cdk import aws_apigatewayv2_authorizers as apigwv2_authorizers
 from aws_cdk import aws_apigatewayv2_integrations as apigwv2_integrations
 from aws_cdk import aws_bedrock as bedrock
 from aws_cdk import aws_bedrockagentcore as agentcore
+from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
@@ -60,6 +65,16 @@ from shared.builtin_rules import BUILT_IN_RULES
 # records) are kept. After this the S3 lifecycle rule and the DynamoDB TTL
 # remove them, so unredacted source text cannot linger indefinitely.
 DOCUMENT_RETENTION_DAYS = 1
+
+# Cognito group of administrators (manage users and rules). Everyone else
+# is a regular user who uploads documents and works with their own jobs.
+# Must match `lambdas/request_auth.py` ADMIN_GROUP.
+ADMIN_GROUP_NAME = "admins"
+
+# Stage-wide API throttle (requests per second, burst). Applies to all
+# callers together, which is enough for a POC with a handful of users.
+API_THROTTLE_RATE_LIMIT = 10
+API_THROTTLE_BURST_LIMIT = 20
 
 LLM_PII_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 LLM_PII_FOUNDATION_MODEL = "anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -88,11 +103,48 @@ IMAGE_OCR_FOUNDATION_MODEL = "anthropic.claude-sonnet-4-5-20250929-v1:0"
 # construct with direct code deployment.
 
 
+def _invitation_body(app_url: Optional[str]) -> str:
+    """Invitation email; Cognito fills in {username} and {####}."""
+    where_zh = f"请访问 {app_url} ," if app_url else ""
+    where_en = f" at {app_url}" if app_url else ""
+    return (
+        "您已受邀使用 PII 文档脱敏系统。<br>"
+        f"{where_zh}用邮箱 {{username}} 和临时密码 {{####}} 登录,首次登录需设置新密码。"
+        "临时密码 3 天内有效。<br><br>"
+        "You have been invited to the PII Document Redaction system. "
+        f"Sign in{where_en} with {{username}} and the temporary password {{####}}; "
+        "you will be asked to set a new password. The temporary password is valid for 3 days."
+    )
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def validate_admin_email(value: Optional[str]) -> str:
+    """The first administrator's email, normalized; raises ValueError."""
+    email = (value or "").strip().lower()
+    if not _EMAIL_RE.match(email):
+        raise ValueError(
+            "The first administrator's email is required: deploy with "
+            "`cdk deploy -c adminEmail=you@example.com` (or set ADMIN_EMAIL)."
+        )
+    return email
+
+
 class RedactionStack(Stack):
     """Top-level stack that will host all backend infrastructure."""
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        admin_email: str,
+        app_url: Optional[str] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        admin_email = validate_admin_email(admin_email)
 
         # `RedactionJobs` table: tracks each document redaction job from
         # creation (`processing`) through to a terminal state (`completed`
@@ -833,11 +885,123 @@ class RedactionStack(Stack):
         # HTTP API (API Gateway v2). HTTPS-only at the edge by construction:
         # no custom domain / HTTP listener is configured, so there is no
         # non-HTTPS entry point to disable.
+        # Users sign in with Cognito; every API route requires a valid token.
+        # Self sign-up is off: accounts are created by an administrator
+        # (`aws cognito-idp admin-create-user`), so only invited people can
+        # upload documents or read results.
+        self.user_pool = cognito.UserPool(
+            self,
+            "RedactionUserPool",
+            user_pool_name="PiiDocumentRedactionUsers",
+            self_sign_up_enabled=False,
+            sign_in_aliases=cognito.SignInAliases(email=True),
+            auto_verify=cognito.AutoVerifiedAttrs(email=True),
+            password_policy=cognito.PasswordPolicy(
+                min_length=12,
+                require_lowercase=True,
+                require_uppercase=True,
+                require_digits=True,
+                require_symbols=False,
+                temp_password_validity=Duration.days(3),
+            ),
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            user_invitation=cognito.UserInvitationConfig(
+                email_subject="PII 文档脱敏系统 - 账号邀请 / Account invitation",
+                email_body=_invitation_body(app_url),
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        self.user_pool_client = self.user_pool.add_client(
+            "WebClient",
+            generate_secret=False,
+            auth_flows=cognito.AuthFlow(user_password=True),
+            prevent_user_existence_errors=True,
+            access_token_validity=Duration.hours(1),
+            id_token_validity=Duration.hours(1),
+            refresh_token_validity=Duration.hours(8),
+        )
+        admins_group = cognito.CfnUserPoolGroup(
+            self,
+            "AdminsGroup",
+            user_pool_id=self.user_pool.user_pool_id,
+            group_name=ADMIN_GROUP_NAME,
+            description="Administrators: manage users and redaction rules.",
+        )
+        # First administrator: created (and invited by email) on deploy, so a
+        # fresh installation can be administered without any manual step.
+        # The handler never deletes or demotes anyone.
+        self.bootstrap_admin_handler = lambda_.Function(
+            self,
+            "BootstrapAdminHandler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="bootstrap_admin_handler.handler",
+            code=lambda_.Code.from_asset("lambdas"),
+            timeout=Duration.seconds(29),
+        )
+        self.bootstrap_admin_handler.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "cognito-idp:AdminGetUser",
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminAddUserToGroup",
+                ],
+                resources=[self.user_pool.user_pool_arn],
+            )
+        )
+        bootstrap_provider = cr.Provider(
+            self, "BootstrapAdminProvider", on_event_handler=self.bootstrap_admin_handler
+        )
+        bootstrap_admin = CustomResource(
+            self,
+            "BootstrapAdmin",
+            service_token=bootstrap_provider.service_token,
+            properties={"UserPoolId": self.user_pool.user_pool_id, "Email": admin_email},
+        )
+        bootstrap_admin.node.add_dependency(admins_group)
+
+        # User management API, for administrators only.
+        self.users_handler = lambda_.Function(
+            self,
+            "UsersHandler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="users_handler.handler",
+            code=lambda_.Code.from_asset("lambdas"),
+            timeout=Duration.seconds(29),
+            environment={"USER_POOL_ID": self.user_pool.user_pool_id},
+        )
+        self.users_handler.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "cognito-idp:ListUsers",
+                    "cognito-idp:ListUsersInGroup",
+                    "cognito-idp:AdminGetUser",
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminDeleteUser",
+                    "cognito-idp:AdminAddUserToGroup",
+                    "cognito-idp:AdminRemoveUserFromGroup",
+                    "cognito-idp:AdminUserGlobalSignOut",
+                ],
+                resources=[self.user_pool.user_pool_arn],
+            )
+        )
+        users_integration = apigwv2_integrations.HttpLambdaIntegration(
+            "UsersIntegration", self.users_handler
+        )
+
+        api_authorizer = apigwv2_authorizers.HttpUserPoolAuthorizer(
+            "CognitoAuthorizer",
+            self.user_pool,
+            user_pool_clients=[self.user_pool_client],
+        )
+
         self.http_api = apigwv2.HttpApi(
             self,
             "RedactionHttpApi",
             api_name="PiiDocumentRedactionPocApi",
             create_default_stage=True,
+            # Applies to every route; CORS preflight (OPTIONS) is answered by
+            # API Gateway itself and needs no token.
+            default_authorizer=api_authorizer,
             cors_preflight=apigwv2.CorsPreflightOptions(
                 allow_origins=["http://localhost:5173", "http://44.236.84.187:5173"],
                 allow_methods=[
@@ -850,6 +1014,15 @@ class RedactionStack(Stack):
                 allow_headers=["Content-Type", "Authorization"],
             ),
         )
+        default_stage = self.http_api.default_stage.node.default_child
+        default_stage.default_route_settings = apigwv2.CfnStage.RouteSettingsProperty(
+            throttling_rate_limit=API_THROTTLE_RATE_LIMIT,
+            throttling_burst_limit=API_THROTTLE_BURST_LIMIT,
+        )
+
+        CfnOutput(self, "ApiUrl", value=self.http_api.api_endpoint)
+        CfnOutput(self, "UserPoolId", value=self.user_pool.user_pool_id)
+        CfnOutput(self, "UserPoolClientId", value=self.user_pool_client.user_pool_client_id)
 
         # Route table (design.md "API Design"). `POST /jobs` points at the
         # real `UploadHandler`, `GET /jobs/{jobId}` at the real
@@ -911,4 +1084,19 @@ class RedactionStack(Stack):
             path="/jobs/{jobId}/redact",
             methods=[apigwv2.HttpMethod.POST],
             integration=redact_integration,
+        )
+        self.http_api.add_routes(
+            path="/users",
+            methods=[apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+            integration=users_integration,
+        )
+        self.http_api.add_routes(
+            path="/users/{username}",
+            methods=[apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
+            integration=users_integration,
+        )
+        self.http_api.add_routes(
+            path="/users/{username}/resend-invite",
+            methods=[apigwv2.HttpMethod.POST],
+            integration=users_integration,
         )

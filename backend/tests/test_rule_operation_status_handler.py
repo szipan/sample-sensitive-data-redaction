@@ -37,6 +37,7 @@ def _api_gateway_event(operation_id: str) -> dict:
         "headers": {},
         "pathParameters": {"operationId": operation_id},
         "requestContext": {
+            "authorizer": {"jwt": {"claims": {"sub": "admin-1", "cognito:groups": "[admins]"}}},
             "http": {"method": "GET", "path": "/rule-operations/" + operation_id}
         },
     }

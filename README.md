@@ -31,7 +31,7 @@ frontend/                   React 前端
 | Python | 3.12(`python3.12` 在 PATH 中) |
 | Node.js | `^22.22.2` 或 `^24.15.0`(见 `frontend/package.json` 的 engines) |
 | AWS CDK CLI | `npm install -g aws-cdk` |
-| AWS CLI | 已配置有权限创建 IAM / Lambda / S3 / DynamoDB / SQS / API Gateway / Bedrock / AgentCore / CloudFormation 的凭证 |
+| AWS CLI | 已配置凭证,权限见下文"部署所需的最小 IAM 权限" |
 | Region | **`us-west-2`** |
 | CDK bootstrap | 目标账号 + region 做过一次 `cdk bootstrap` |
 | Bedrock 模型访问 | 在 us-west-2 开通 Anthropic Claude Haiku 4.5 和 Claude Sonnet 4.5(使用 `us.` 跨区推理配置) |
@@ -43,6 +43,19 @@ frontend/                   React 前端
 > export AWS_DEFAULT_REGION=us-west-2
 > aws sts get-caller-identity   # 确认账号正确
 > ```
+
+### 部署所需的最小 IAM 权限
+
+部署用的 IAM 身份(用户或角色均可)附加 [`docs/least-privilege-deploy-policy.json`](docs/least-privilege-deploy-policy.json) 即可跑 `cdk bootstrap` / `cdk deploy`。它只允许扮演 CDK bootstrap 角色、读取本应用的栈,并包含一次性的 bootstrap 权限,自身不能直接创建任何应用资源。
+
+```bash
+aws iam create-policy --policy-name pii-redaction-deploy \
+  --policy-document file://docs/least-privilege-deploy-policy.json
+aws iam attach-user-policy --user-name <YOUR_DEPLOY_USER> --policy-arn <POLICY_ARN>
+# 或: aws iam attach-role-policy --role-name <YOUR_DEPLOY_ROLE> --policy-arn <POLICY_ARN>
+```
+
+> **注意**:默认 `cdk bootstrap` 的 CloudFormation 执行角色是 `AdministratorAccess`,并且同账号、同区域的所有 CDK 应用共用。要把资源创建权限也收敛到本应用,需要用独立 qualifier 做一次 bootstrap,并把 [`docs/least-privilege-cfn-exec-policy.json`](docs/least-privilege-cfn-exec-policy.json) 挂给执行角色。步骤、依据和未验证的部分见 [`docs/least-privilege-deploy-policy.md`](docs/least-privilege-deploy-policy.md)。
 
 ## 一、后端部署
 
@@ -103,11 +116,18 @@ cmp agent_bundle/package_clean/main.py agent/main.py && echo OK                #
 
 ### 4. 部署
 
+部署时必须提供**首个管理员的邮箱**。部署完成后 Cognito 会向该邮箱发送邀请邮件(含临时密码),不需要任何手工建号步骤。可选的 `appUrl` 是前端访问地址,会写进邀请邮件。
+
 ```bash
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2
-cdk diff                          # 先看变更,首次部署会列出全部新建资源
-cdk deploy --require-approval never
+cdk diff -c adminEmail=admin@example.com            # 先看变更,首次部署会列出全部新建资源
+cdk deploy --require-approval never \
+  -c adminEmail=admin@example.com \
+  -c appUrl=https://redaction.example.com             # 可选
 ```
+
+也可以用环境变量 `ADMIN_EMAIL` / `APP_URL` 代替 `-c`。不提供管理员邮箱时 `cdk synth/diff/deploy` 会直接报错。以后重新部署时沿用同一个邮箱即可:该步骤只会确保这个管理员存在,不会重发邀请,也不会删除或降级任何人;换成新邮箱会再增加一位管理员。
+
 
 要点:
 
@@ -121,16 +141,49 @@ aws cloudformation describe-stacks --region us-west-2 \
   --query 'Stacks[0].StackStatus' --output text      # UPDATE_COMPLETE / CREATE_COMPLETE
 ```
 
-### 5. 获取 API 地址
+### 5. 获取 API 地址与登录配置
 
-Stack 没有定义 CloudFormation Output,用下面的命令查 HTTP API 的地址:
+Stack 输出 API 地址和 Cognito 用户池信息,前端配置要用:
 
 ```bash
-aws apigatewayv2 get-apis --region us-west-2 \
-  --query "Items[?Name=='PiiDocumentRedactionPocApi'].ApiEndpoint" --output text
+aws cloudformation describe-stacks --region us-west-2 \
+  --stack-name PiiDocumentRedactionPocStack \
+  --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output text
+# ApiUrl            https://xxxxxxxx.execute-api.us-west-2.amazonaws.com
+# UserPoolId        us-west-2_XXXXXXXXX
+# UserPoolClientId  xxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-返回形如 `https://xxxxxxxx.execute-api.us-west-2.amazonaws.com`,前端构建时要用。
+### 5.1 角色与用户管理
+
+系统有两个角色:
+
+| 角色 | 能做什么 |
+| --- | --- |
+| 管理员(Cognito `admins` 组) | 上传和处理文档;在"用户管理"页邀请管理员或普通用户、调整角色、重发邀请、删除用户;在"规则管理"页维护脱敏规则 |
+| 普通用户 | 只能上传文档、处理并下载自己的任务,看不到规则和用户管理 |
+
+常用流程:
+
+1. 部署时用 `-c adminEmail=...` 指定首个管理员,对方收到邀请邮件。
+2. 管理员用邮箱和临时密码登录前端,按提示设置新密码(至少 12 位,含大小写字母和数字)。
+3. 在"用户管理"页输入邮箱、选择角色,点"发送邀请"。临时密码 3 天内有效,过期后用"重发邀请"。
+
+规则与限制:
+
+- **只能邀请建号**:用户池关闭了自助注册。
+- **不会把自己锁在外面**:管理员不能降级或删除自己,最后一位管理员也不能被移除。
+- **角色变更的生效时间**:降级或删除用户时会吊销其登录会话,但已签发的访问令牌在过期前(最长 1 小时)仍然有效。升级为管理员在对方重新登录后生效。
+- **作业按用户隔离**:每个作业记录上传者(`ownerId`),别人的作业一律按"不存在"返回 404,管理员也看不到别人的文档。
+- **所有 API 都要登录**:没有令牌返回 401,普通用户访问管理接口返回 403。API 整体限流为每秒 10 次请求、突发 20 次(`API_THROTTLE_*` 常量)。
+- **邮件发送量**:邀请邮件由 Cognito 默认发件人发出,每天最多 50 封。用户多时需要在用户池里配置 Amazon SES。
+
+如果管理员都无法登录(例如唯一的管理员离职),可以用新邮箱重新部署 `-c adminEmail=new-admin@example.com`,或用 AWS CLI 直接操作用户池:
+
+```bash
+aws cognito-idp admin-add-user-to-group --region us-west-2 --user-pool-id <UserPoolId> \
+  --username someone@example.com --group-name admins
+```
 
 ### 6. CORS 允许的前端来源
 
@@ -140,15 +193,21 @@ API 的 CORS 白名单写在 `backend/infra/redaction_stack.py` 的 `cors_prefli
 
 ```bash
 BASE=https://<api-id>.execute-api.us-west-2.amazonaws.com
+# 取访问令牌(用户需已设置过永久密码)
+TOKEN=$(aws cognito-idp initiate-auth --region us-west-2 \
+  --client-id <UserPoolClientId> --auth-flow USER_PASSWORD_AUTH \
+  --auth-parameters USERNAME=user@example.com,PASSWORD='<password>' \
+  --query AuthenticationResult.AccessToken --output text)
+AUTH="Authorization: Bearer $TOKEN"
 
 # 上传(字段名 file,支持 .pdf / .docx),返回 {"jobId": ..., "status": "processing"}
-curl -s -X POST "$BASE/jobs" -F "file=@sample.docx;filename=sample.docx"
+curl -s -H "$AUTH" -X POST "$BASE/jobs" -F "file=@sample.docx;filename=sample.docx"
 
 # 轮询直到 status 变为 completed(或 failed)
-curl -s "$BASE/jobs/<jobId>"
+curl -s -H "$AUTH" "$BASE/jobs/<jobId>"
 
 # 下载脱敏后的文件
-curl -s -o redacted.docx "$BASE/jobs/<jobId>/download"
+curl -s -H "$AUTH" -o redacted.docx "$BASE/jobs/<jobId>/download"
 ```
 
 确认 Agent 以 Strands agent 形态运行(CloudWatch Logs):
@@ -197,19 +256,24 @@ npm ci
 
 ### 本地开发
 
-在 `frontend/.env.local`(已 gitignore)里写入后端地址,然后启动:
+在 `frontend/.env.development.local`(已 gitignore)里写入后端地址和 Cognito 配置,然后启动。注意要用 `.env.development.local`:开发模式下 `.env.development` 的优先级高于 `.env.local`。
 
 ```bash
-echo 'VITE_API_BASE_URL=https://<api-id>.execute-api.us-west-2.amazonaws.com' > .env.local
+cat > .env.development.local <<'ENV'
+VITE_API_BASE_URL=https://<api-id>.execute-api.us-west-2.amazonaws.com
+VITE_COGNITO_REGION=us-west-2
+VITE_COGNITO_CLIENT_ID=<UserPoolClientId>
+ENV
 npm run dev            # 默认 http://localhost:5173
 ```
 
-地址必须是 `https://`,非 HTTPS 会在构造时被拒绝。生产构建中缺少 `VITE_API_BASE_URL` 会直接失败(故意不回退到 localhost)。**不要把真实 API 地址提交进 `.env.*` 文件。**
+地址必须是 `https://`,非 HTTPS 会在构造时被拒绝。缺少 `VITE_COGNITO_REGION` 或 `VITE_COGNITO_CLIENT_ID` 时应用启动即报错。生产构建中缺少 `VITE_API_BASE_URL` 会直接失败(故意不回退到 localhost)。**不要把真实 API 地址提交进 `.env.*` 文件。**
 
 ### 生产构建
 
 ```bash
-VITE_API_BASE_URL=https://<api-id>.execute-api.us-west-2.amazonaws.com npm run build
+VITE_API_BASE_URL=https://<api-id>.execute-api.us-west-2.amazonaws.com \
+VITE_COGNITO_REGION=us-west-2 VITE_COGNITO_CLIENT_ID=<UserPoolClientId> npm run build
 ```
 
 产物在 `frontend/dist/`,是纯静态文件,可放到任意静态托管(S3 + CloudFront、Nginx 等)。托管后的访问来源要加入后端 CORS 白名单(见上文"CORS")。

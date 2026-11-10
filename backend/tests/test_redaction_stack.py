@@ -83,7 +83,7 @@ EXPECTED_IMAGE_OCR_FOUNDATION_MODEL_ARN = (
 # Route table declared in `redaction_stack.py` ("API Design"): 8
 # pre-existing routes + 2 detection-review-mode routes
 # (GET /jobs/{jobId}/detections, POST /jobs/{jobId}/redact).
-EXPECTED_ROUTE_COUNT = 10
+EXPECTED_ROUTE_COUNT = 15
 
 RUNTIME_RESOURCE_TYPE = "AWS::BedrockAgentCore::Runtime"
 
@@ -110,6 +110,8 @@ def template_json():
         stack = RedactionStack(
             app,
             "TestStack",
+            admin_email="first-admin@example.com",
+            app_url="https://app.example.com",
             env=cdk.Environment(account=TEST_ACCOUNT, region=TEST_REGION),
         )
         template = Template.from_stack(stack)
@@ -254,7 +256,9 @@ def test_runtime_env_value_equals_stack_constant(template_json):
 def test_no_new_api_route_was_introduced(template_json):
     """The synthesized HTTP API carries exactly the expected number of routes:
     8 original routes + 2 detection-review-mode routes
-    (GET /jobs/{jobId}/detections, POST /jobs/{jobId}/redact)."""
+    (GET /jobs/{jobId}/detections, POST /jobs/{jobId}/redact) + 5 user
+    management routes (GET/POST /users, PATCH/DELETE /users/{username},
+    POST /users/{username}/resend-invite)."""
     assert _resource_count(template_json, "AWS::ApiGatewayV2::Route") == (
         EXPECTED_ROUTE_COUNT
     )
@@ -436,3 +440,87 @@ def test_agent_delete_permission_is_scoped(template_json):
     assert "OutputDocumentsBucket" in resources
     assert "/*/detections.json" in resources
     assert '"/*"' not in resources.split("OutputDocumentsBucket", 1)[1].split("]", 1)[0]
+
+
+# ---------------------------------------------------------------------------
+# API access control
+# ---------------------------------------------------------------------------
+def _resources(template_json, type_name):
+    return [r for r in template_json["Resources"].values() if r["Type"] == type_name]
+
+
+def test_every_api_route_requires_cognito_jwt(template_json):
+    routes = _resources(template_json, "AWS::ApiGatewayV2::Route")
+    assert len(routes) == EXPECTED_ROUTE_COUNT
+    authorizers = _resources(template_json, "AWS::ApiGatewayV2::Authorizer")
+    assert len(authorizers) == 1
+    assert authorizers[0]["Properties"]["AuthorizerType"] == "JWT"
+    for route in routes:
+        props = route["Properties"]
+        assert not props["RouteKey"].startswith("OPTIONS")
+        assert props["AuthorizationType"] == "JWT", props["RouteKey"]
+        assert "AuthorizerId" in props
+
+
+def test_api_stage_is_throttled(template_json):
+    from infra.redaction_stack import API_THROTTLE_BURST_LIMIT, API_THROTTLE_RATE_LIMIT
+
+    stages = _resources(template_json, "AWS::ApiGatewayV2::Stage")
+    settings = stages[0]["Properties"]["DefaultRouteSettings"]
+    assert settings["ThrottlingRateLimit"] == API_THROTTLE_RATE_LIMIT
+    assert settings["ThrottlingBurstLimit"] == API_THROTTLE_BURST_LIMIT
+
+
+def test_user_pool_is_invite_only_with_admin_group(template_json):
+    from infra.redaction_stack import ADMIN_GROUP_NAME
+
+    sys.path.insert(0, str(BACKEND_ROOT / "lambdas"))
+    import request_auth
+
+    pools = _resources(template_json, "AWS::Cognito::UserPool")
+    assert len(pools) == 1
+    assert pools[0]["Properties"]["AdminCreateUserConfig"]["AllowAdminCreateUserOnly"] is True
+    groups = _resources(template_json, "AWS::Cognito::UserPoolGroup")
+    assert [g["Properties"]["GroupName"] for g in groups] == [ADMIN_GROUP_NAME]
+    assert request_auth.ADMIN_GROUP == ADMIN_GROUP_NAME
+    clients = _resources(template_json, "AWS::Cognito::UserPoolClient")
+    assert clients[0]["Properties"].get("GenerateSecret") in (False, None)
+
+
+def test_first_admin_is_created_on_deploy(template_json):
+    resources = template_json["Resources"].values()
+    bootstrap = [r for r in resources if r["Type"] == "AWS::CloudFormation::CustomResource"
+                 and "Email" in r.get("Properties", {})]
+    assert len(bootstrap) == 1
+    assert bootstrap[0]["Properties"]["Email"] == "first-admin@example.com"
+
+
+def test_invitation_email_has_placeholders_and_app_url(template_json):
+    pool = _resources(template_json, "AWS::Cognito::UserPool")[0]["Properties"]
+    invite = pool["AdminCreateUserConfig"]["InviteMessageTemplate"]
+    assert "{username}" in invite["EmailMessage"] and "{####}" in invite["EmailMessage"]
+    assert "https://app.example.com" in invite["EmailMessage"]
+
+
+def test_user_management_permissions_are_scoped_to_the_pool(template_json):
+    import json as _json
+
+    cognito_statements = []
+    for policy in _resources(template_json, "AWS::IAM::Policy"):
+        for st in policy["Properties"]["PolicyDocument"]["Statement"]:
+            actions = st["Action"] if isinstance(st["Action"], list) else [st["Action"]]
+            if any(a.startswith("cognito-idp:") for a in actions):
+                cognito_statements.append(st)
+    assert len(cognito_statements) == 2  # users API and first-admin bootstrap
+    for st in cognito_statements:
+        assert st["Resource"] != "*"
+        assert "RedactionUserPool" in _json.dumps(st["Resource"])
+
+
+def test_missing_admin_email_is_rejected():
+    from infra.redaction_stack import validate_admin_email
+
+    for bad in (None, "", "  ", "not-an-email", "a@b"):
+        with pytest.raises(ValueError):
+            validate_admin_email(bad)
+    assert validate_admin_email(" Admin@Example.COM ") == "admin@example.com"

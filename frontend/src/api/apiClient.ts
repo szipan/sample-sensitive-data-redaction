@@ -25,12 +25,28 @@
  * then validated to be `https://` by `createApiClient`.
  */
 import { createApiClient } from './client'
-import { resolveApiBaseUrl } from './apiConfig'
+import { resolveApiBaseUrl, resolveCognitoConfig } from './apiConfig'
+import { AuthSession } from '../auth/session'
 
 const baseUrl = resolveApiBaseUrl({
   configuredBaseUrl: import.meta.env.VITE_API_BASE_URL,
   isProduction: import.meta.env.PROD,
 })
 
-/** The single `ApiClient` instance used throughout the app. */
-export const apiClient = createApiClient({ baseUrl })
+/** The signed-in user's Cognito session, shared by the app. */
+export const authSession = new AuthSession({
+  config: resolveCognitoConfig({
+    region: import.meta.env.VITE_COGNITO_REGION,
+    clientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
+  }),
+})
+
+/**
+ * The single `ApiClient` instance used throughout the app. Every request
+ * carries the user's access token; a 401 ends the session.
+ */
+export const apiClient = createApiClient({
+  baseUrl,
+  getAccessToken: () => authSession.getAccessToken(),
+  onUnauthorized: () => authSession.signOut(),
+})

@@ -88,7 +88,10 @@ def _api_gateway_event(content_type: str, body: bytes) -> dict:
         "headers": {"content-type": content_type},
         "isBase64Encoded": True,
         "body": base64.b64encode(body).decode("ascii"),
-        "requestContext": {"http": {"method": "POST", "path": "/jobs"}},
+        "requestContext": {
+            "authorizer": {"jwt": {"claims": {"sub": "user-1"}}},
+            "http": {"method": "POST", "path": "/jobs"},
+        },
     }
 
 

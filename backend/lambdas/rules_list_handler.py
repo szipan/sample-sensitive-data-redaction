@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 
 from shared.models import RedactionRule
 from shared.rules_repository import RulesRepository
+from request_auth import caller_id, is_admin, unauthorized_response
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -53,5 +54,16 @@ def _rule_to_response_dict(rule: RedactionRule) -> Dict[str, Any]:
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    # Rules are managed by administrators; regular users only process documents.
+    if caller_id(event) is None:
+        return unauthorized_response()
+    if not is_admin(event):
+        return {
+            "statusCode": 403,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {"error": {"code": "FORBIDDEN", "message": "Only administrators can manage rules."}}
+            ),
+        }
     rules: List[RedactionRule] = _get_rules_repository().get_all()
     return _json_response(200, {"rules": [_rule_to_response_dict(rule) for rule in rules]})

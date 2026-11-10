@@ -63,6 +63,9 @@ import type {
   SetRuleEnabledRequest,
   SubmitRedactionResponse,
   UploadResponse,
+  UserResponse,
+  UserRole,
+  UsersListResponse,
 } from './types'
 import { ApiError, ApiTimeoutError } from './types'
 
@@ -140,6 +143,13 @@ export interface ApiClientOptions {
   baseUrl: string
   /** Injectable fetch implementation, primarily for testing. */
   fetchImpl?: typeof fetch
+  /**
+   * Supplies the bearer token sent as `Authorization` on every request.
+   * Returning null sends the request without one (the API then answers 401).
+   */
+  getAccessToken?: () => Promise<string | null>
+  /** Called when the API answers 401, e.g. to return to the sign-in screen. */
+  onUnauthorized?: () => void
 }
 
 export type RuleOperationRequest =
@@ -162,6 +172,11 @@ export interface ApiClient {
   getRuleOperationStatus(operationId: string): Promise<RuleOperationStatusResponse>
   getDetections(jobId: string): Promise<DetectionResults>
   submitRedaction(jobId: string, selectedIds: number[]): Promise<SubmitRedactionResponse>
+  listUsers(): Promise<UsersListResponse>
+  createUser(email: string, role: UserRole): Promise<UserResponse>
+  setUserRole(username: string, role: UserRole): Promise<UserResponse>
+  deleteUser(username: string): Promise<void>
+  resendInvite(username: string): Promise<void>
 }
 
 async function parseErrorBody(response: Response): Promise<ApiErrorBody['error'] | null> {
@@ -192,7 +207,18 @@ async function throwApiError(response: Response): Promise<never> {
  */
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const baseUrl = toHttpsBaseUrl(options.baseUrl)
-  const doFetch = options.fetchImpl ?? fetch
+  const rawFetch = options.fetchImpl ?? fetch
+  const { getAccessToken, onUnauthorized } = options
+  const doFetch: typeof fetch = getAccessToken
+    ? async (input, init) => {
+        const token = await getAccessToken()
+        const headers = new Headers(init?.headers)
+        if (token) headers.set('Authorization', `Bearer ${token}`)
+        const response = await rawFetch(input, { ...init, headers })
+        if (response.status === 401) onUnauthorized?.()
+        return response
+      }
+    : rawFetch
 
   function url(path: string): string {
     return `${baseUrl}${path}`
@@ -353,6 +379,40 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     return (await response.json()) as SubmitRedactionResponse
   }
 
+  async function sendJson(method: string, path: string, body?: unknown): Promise<Response> {
+    const response = await fetchWithTimeout(doFetch, url(path), {
+      method,
+      ...(body === undefined
+        ? {}
+        : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+    })
+    if (!response.ok) {
+      await throwApiError(response)
+    }
+    return response
+  }
+
+  async function listUsers(): Promise<UsersListResponse> {
+    return (await (await sendJson('GET', '/users')).json()) as UsersListResponse
+  }
+
+  async function createUser(email: string, role: UserRole): Promise<UserResponse> {
+    return (await (await sendJson('POST', '/users', { email, role })).json()) as UserResponse
+  }
+
+  async function setUserRole(username: string, role: UserRole): Promise<UserResponse> {
+    const response = await sendJson('PATCH', `/users/${encodeURIComponent(username)}`, { role })
+    return (await response.json()) as UserResponse
+  }
+
+  async function deleteUser(username: string): Promise<void> {
+    await sendJson('DELETE', `/users/${encodeURIComponent(username)}`)
+  }
+
+  async function resendInvite(username: string): Promise<void> {
+    await sendJson('POST', `/users/${encodeURIComponent(username)}/resend-invite`)
+  }
+
   return {
     baseUrl,
     uploadDocument,
@@ -363,5 +423,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     getRuleOperationStatus,
     getDetections,
     submitRedaction,
+    listUsers,
+    createUser,
+    setUserRole,
+    deleteUser,
+    resendInvite,
   }
 }

@@ -48,6 +48,7 @@ from shared.models import (
     is_valid_pattern_length,
 )
 from shared.rule_operations_repository import RuleOperationsRepository
+from request_auth import caller_id, is_admin, unauthorized_response
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -220,6 +221,13 @@ def _handle_delete(event: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    # Rules are global and decide what every later job redacts, so only
+    # members of the admin group may change them.
+    if caller_id(event) is None:
+        return unauthorized_response()
+    if not is_admin(event):
+        return _error_response(403, "FORBIDDEN", "Only administrators can change rules.")
+
     method = _http_method(event)
 
     if method == "POST":

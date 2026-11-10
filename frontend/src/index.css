@@ -185,7 +185,7 @@ hr {
 }
 
 /* Form elements */
-select, input[type="text"], input[type="file"] {
+select, input[type="text"], input[type="email"], input[type="password"], input[type="file"] {
   font-family: var(--font-sans);
   font-size: 14px;
   padding: 5px 12px;
@@ -417,3 +417,21 @@ form label {
 .status-warning { color: var(--color-warning-fg); }
 .status-success { color: var(--color-success-fg); }
 .status-danger { color: var(--color-danger-fg); }
+
+/* Signed-in user and sign-out button in the header */
+.app-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  font-size: 13px;
+  color: var(--color-fg-subtle);
+}
+
+/* Sign-in form rows */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}

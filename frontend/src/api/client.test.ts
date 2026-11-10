@@ -281,3 +281,35 @@ describe('request timeout (distinguishable timeout error)', () => {
     await expect(client.getJobStatus('job-1')).rejects.toBe(networkError)
   })
 })
+
+describe('createApiClient authentication', () => {
+  it('sends the bearer token and reports 401', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 401 }))
+    const onUnauthorized = vi.fn()
+    const client = createApiClient({
+      baseUrl: 'https://api.example.com',
+      fetchImpl,
+      getAccessToken: async () => 'tok',
+      onUnauthorized,
+    })
+    await expect(client.listRules()).rejects.toBeInstanceOf(Error)
+    const init = fetchImpl.mock.calls[0][1]
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer tok')
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps existing headers and omits Authorization without a token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ operationId: 'o', status: 'queued' }), { status: 202 }),
+    )
+    const client = createApiClient({
+      baseUrl: 'https://api.example.com',
+      fetchImpl,
+      getAccessToken: async () => null,
+    })
+    await client.submitRuleOperation({ type: 'create', ruleName: 'r', pattern: 'x' })
+    const headers = new Headers(fetchImpl.mock.calls[0][1]?.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.has('Authorization')).toBe(false)
+  })
+})

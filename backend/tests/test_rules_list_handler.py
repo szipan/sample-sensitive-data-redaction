@@ -33,7 +33,10 @@ def _api_gateway_event() -> dict:
         "version": "2.0",
         "routeKey": "GET /rules",
         "headers": {},
-        "requestContext": {"http": {"method": "GET", "path": "/rules"}},
+        "requestContext": {
+            "authorizer": {"jwt": {"claims": {"sub": "admin-1", "cognito:groups": "[admins]"}}},
+            "http": {"method": "GET", "path": "/rules"},
+        },
     }
 
 

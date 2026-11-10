@@ -72,3 +72,29 @@ export function resolveApiBaseUrl(env: ApiBaseUrlEnv): string {
 
   return DEFAULT_LOCAL_DEV_BASE_URL
 }
+
+export interface CognitoEnv {
+  region: string | undefined
+  clientId: string | undefined
+}
+
+/**
+ * Resolves the Cognito user pool client the app signs in against, from
+ * `VITE_COGNITO_REGION` and `VITE_COGNITO_CLIENT_ID`. Both are required in
+ * every mode: without them nobody can sign in, so failing fast is clearer
+ * than a sign-in form that cannot work.
+ */
+export function resolveCognitoConfig(env: CognitoEnv): { region: string; clientId: string } {
+  const region = env.region?.trim()
+  const clientId = env.clientId?.trim()
+  if (!region || !clientId) {
+    throw new Error(
+      'VITE_COGNITO_REGION and VITE_COGNITO_CLIENT_ID are required. ' +
+        'Use the UserPoolClientId output of the backend stack and its region.',
+    )
+  }
+  if (!/^[a-z]{2}(-[a-z]+)+-\d$/.test(region)) {
+    throw new Error(`VITE_COGNITO_REGION is not an AWS region: "${region}"`)
+  }
+  return { region, clientId }
+}

@@ -34,6 +34,7 @@ sys.path.insert(0, str(BACKEND_ROOT / "lambdas"))
 
 JOBS_TABLE_NAME = "RedactionJobs-test"
 OUTPUT_BUCKET_NAME = "output-documents-test"
+TEST_USER_ID = "user-1"
 
 
 def _api_gateway_event(job_id: str) -> dict:
@@ -42,7 +43,8 @@ def _api_gateway_event(job_id: str) -> dict:
         "routeKey": "GET /jobs/{jobId}/download",
         "pathParameters": {"jobId": job_id},
         "requestContext": {
-            "http": {"method": "GET", "path": "/jobs/{}/download".format(job_id)}
+            "authorizer": {"jwt": {"claims": {"sub": TEST_USER_ID}}},
+            "http": {"method": "GET", "path": "/jobs/{}/download".format(job_id)},
         },
     }
 
@@ -100,6 +102,7 @@ def _put_job(jobs_table, job_id: str, status: str, **extra):
         "createdAt": "2024-01-01T00:00:00+00:00",
         "updatedAt": "2024-01-01T00:00:00+00:00",
     }
+    item.setdefault("ownerId", TEST_USER_ID)
     item.update(extra)
     jobs_table.put_item(Item=item)
 

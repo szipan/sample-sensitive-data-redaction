@@ -42,7 +42,10 @@ def _api_gateway_event(method: str, path: str, body: dict = None, path_parameter
         "version": "2.0",
         "routeKey": "{} {}".format(method, path),
         "headers": {"content-type": "application/json"},
-        "requestContext": {"http": {"method": method, "path": path}},
+        "requestContext": {
+            "authorizer": {"jwt": {"claims": {"sub": "admin-1", "cognito:groups": "[admins]"}}},
+            "http": {"method": method, "path": path},
+        },
     }
     if body is not None:
         event["body"] = json.dumps(body)

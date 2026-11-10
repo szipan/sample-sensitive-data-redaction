@@ -44,6 +44,11 @@ import type { PollHandle } from '../api/polling'
 export interface RuleManagementViewProps {
   /** API client used to list rules and submit/poll Rule Operations. */
   apiClient: ApiClient
+  /**
+   * Whether the user may change rules (admin group). Non-admins see the
+   * rules read-only; the API rejects their changes regardless.
+   */
+  canEdit?: boolean
 }
 
 /**
@@ -70,6 +75,7 @@ function describeRejection(
 }
 
 function describeSubmitFailure(t: TranslateFn, error: unknown): string {
+  if (error instanceof ApiError && error.code === 'FORBIDDEN') return t('rules.adminOnly')
   return error instanceof ApiError ? error.message : t('rules.err.submitFailed')
 }
 
@@ -92,7 +98,7 @@ const IDLE_ROW_STATUS: RowOperationStatus = { kind: 'idle' }
  * Demonstration User create, enable/disable, or delete Redaction Rules,
  * polling every submitted Rule Operation to its Terminal Result.
  */
-export function RuleManagementView({ apiClient }: RuleManagementViewProps) {
+export function RuleManagementView({ apiClient, canEdit = true }: RuleManagementViewProps) {
   const { t } = useI18n()
   const [rules, setRules] = useState<RedactionRuleDto[]>([])
   const [listError, setListError] = useState<string | null>(null)
@@ -237,6 +243,7 @@ export function RuleManagementView({ apiClient }: RuleManagementViewProps) {
       <h2 id="rule-management-heading">{t('rules.title')}</h2>
 
       {listError && <p role="alert">{listError}</p>}
+      {!canEdit && <p className="status-warning">{t('rules.adminOnly')}</p>}
 
       <table className="data-table">
         <thead>
@@ -265,7 +272,7 @@ export function RuleManagementView({ apiClient }: RuleManagementViewProps) {
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={!canEdit || isPending}
                     onClick={() => void handleToggleEnabled(rule)}
                     style={{ marginRight: '8px' }}
                   >
@@ -274,7 +281,7 @@ export function RuleManagementView({ apiClient }: RuleManagementViewProps) {
                   <button
                     type="button"
                     className="btn-danger"
-                    disabled={rule.isBuiltIn || isPending}
+                    disabled={!canEdit || rule.isBuiltIn || isPending}
                     onClick={() => void handleDelete(rule)}
                   >
                     {t('rules.delete')}
@@ -288,6 +295,7 @@ export function RuleManagementView({ apiClient }: RuleManagementViewProps) {
         </tbody>
       </table>
 
+      {canEdit && (
       <form onSubmit={(event) => void handleCreateSubmit(event)} style={{ marginTop: '24px', width: '50%' }}>
         <h3>{t('rules.newTitle')}</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -315,6 +323,7 @@ export function RuleManagementView({ apiClient }: RuleManagementViewProps) {
 
         {createStatus.kind === 'rejected' && <p role="alert">{createStatus.message}</p>}
       </form>
+      )}
     </section>
   )
 }

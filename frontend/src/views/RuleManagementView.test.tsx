@@ -33,6 +33,11 @@ function createMockApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getRuleOperationStatus: vi.fn(),
     getDetections: vi.fn(),
     submitRedaction: vi.fn(),
+    listUsers: vi.fn(),
+    createUser: vi.fn(),
+    setUserRole: vi.fn(),
+    deleteUser: vi.fn(),
+    resendInvite: vi.fn(),
     ...overrides,
   }
 }
@@ -201,5 +206,19 @@ describe('RuleManagementView', () => {
         ruleName: customRule.ruleName,
       } satisfies RuleOperationRequest),
     )
+  })
+
+  it('is read-only for non-admin users', async () => {
+    const listRules = vi.fn().mockResolvedValue({ rules: [builtInRule, customRule] })
+    const submitRuleOperation = vi.fn()
+    const apiClient = createMockApiClient({ listRules, submitRuleOperation })
+    render(<RuleManagementView apiClient={apiClient} canEdit={false} />)
+    const row = await screen.findByTestId(`rule-row-${customRule.ruleName}`)
+    for (const button of within(row).getAllByRole('button')) {
+      expect(button).toBeDisabled()
+    }
+    expect(screen.queryByLabelText('正则表达式')).not.toBeInTheDocument()
+    expect(screen.getByText('只有管理员可以新建、启用/禁用或删除规则。')).toBeInTheDocument()
+    expect(submitRuleOperation).not.toHaveBeenCalled()
   })
 })

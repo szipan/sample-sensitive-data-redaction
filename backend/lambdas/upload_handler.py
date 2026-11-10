@@ -36,6 +36,8 @@ from typing import Any, Dict, Optional, Tuple
 import boto3
 from botocore.exceptions import ClientError
 
+from request_auth import caller_id, unauthorized_response
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -260,6 +262,10 @@ def _put_job_item(job_item: Dict[str, Any]) -> None:
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    owner_id = caller_id(event)
+    if owner_id is None:
+        return unauthorized_response()
+
     content_type = _get_header(event, "content-type")
     if not content_type or not content_type.lower().startswith("multipart/form-data"):
         return _unsupported_file_type_response()
@@ -304,6 +310,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             _put_job_item(
                 {
                     "jobId": job_id,
+                    "ownerId": owner_id,
                     "status": "failed",
                     "sourceKey": source_key,
                     "sourceExtension": extension,
@@ -335,6 +342,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     _put_job_item(
         {
             "jobId": job_id,
+            "ownerId": owner_id,
             "status": "processing",
             "sourceKey": source_key,
             "sourceExtension": extension,

@@ -32,6 +32,11 @@ function createMockApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getRuleOperationStatus: vi.fn(),
     getDetections: vi.fn(),
     submitRedaction: vi.fn(),
+    listUsers: vi.fn(),
+    createUser: vi.fn(),
+    setUserRole: vi.fn(),
+    deleteUser: vi.fn(),
+    resendInvite: vi.fn(),
     ...overrides,
   }
 }

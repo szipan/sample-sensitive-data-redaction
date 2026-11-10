@@ -27,6 +27,8 @@ from typing import Any, Dict, List, Optional
 import boto3
 from botocore.exceptions import ClientError
 
+from request_auth import caller_id, unauthorized_response
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -106,18 +108,18 @@ def _parse_selected_ids(event: Dict[str, Any]) -> Optional[List[int]]:
     return selected_ids
 
 
-def _resolve_conditional_failure(job_id: str) -> Dict[str, Any]:
+def _resolve_conditional_failure(job_id: str, caller: str) -> Dict[str, Any]:
     """Distinguish the reason for a ConditionalCheckFailedException.
 
     Re-reads the record to determine whether:
-    - The job does not exist → 404
+    - The job does not exist, or belongs to another user → 404
     - The job status is not "detected" → 409 CONFIRMATION_NOT_ALLOWED
     - The job already has confirmedSelections → 409 ALREADY_CONFIRMED
     """
     response = _get_jobs_table().get_item(Key={"jobId": job_id})
     job_item = response.get("Item")
 
-    if job_item is None:
+    if job_item is None or job_item.get("ownerId") != caller:
         return _job_not_found_response()
 
     if job_item.get("status") != "detected":
@@ -136,6 +138,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if not job_id:
         return _job_not_found_response()
 
+    caller = caller_id(event)
+    if caller is None:
+        return unauthorized_response()
+
     selected_ids = _parse_selected_ids(event)
     if selected_ids is None:
         return _error_response(
@@ -150,17 +156,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         _get_jobs_table().update_item(
             Key={"jobId": job_id},
             UpdateExpression="SET confirmedSelections = :ids, updatedAt = :ts",
-            ConditionExpression="#s = :detected AND attribute_not_exists(confirmedSelections)",
+            ConditionExpression=(
+                "ownerId = :owner AND #s = :detected"
+                " AND attribute_not_exists(confirmedSelections)"
+            ),
             ExpressionAttributeNames={"#s": "status"},
             ExpressionAttributeValues={
                 ":ids": selected_ids,
                 ":detected": "detected",
+                ":owner": caller,
                 ":ts": _now_iso(),
             },
         )
     except ClientError as e:
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            return _resolve_conditional_failure(job_id)
+            return _resolve_conditional_failure(job_id, caller)
         raise
 
     return _json_response(202, {"status": "accepted"})

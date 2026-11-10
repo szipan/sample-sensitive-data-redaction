@@ -23,6 +23,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from shared.rule_operations_repository import RuleOperationsRepository
+from request_auth import caller_id, is_admin, unauthorized_response
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -66,6 +67,16 @@ def _extract_operation_id(event: Dict[str, Any]) -> Optional[str]:
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    if caller_id(event) is None:
+        return unauthorized_response()
+    if not is_admin(event):
+        return {
+            "statusCode": 403,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {"error": {"code": "FORBIDDEN", "message": "Only administrators can manage rules."}}
+            ),
+        }
     operation_id = _extract_operation_id(event)
     if not operation_id:
         return _operation_not_found_response()

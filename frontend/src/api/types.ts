@@ -247,3 +247,30 @@ export interface SubmitRedactionRequest {
 export interface SubmitRedactionResponse {
   status: string
 }
+
+/* -------------------------------------------------------------------------- */
+/* User management (administrators only)                                       */
+/* -------------------------------------------------------------------------- */
+
+/** `admin` manages users and rules; `user` processes documents only. */
+export type UserRole = 'admin' | 'user'
+
+export interface ManagedUser {
+  username: string
+  email: string | null
+  role: UserRole
+  /** Cognito status, e.g. `FORCE_CHANGE_PASSWORD` (invited) or `CONFIRMED`. */
+  status: string | null
+  enabled: boolean
+  createdAt: string | null
+  /** True for the signed-in administrator's own account. */
+  isSelf: boolean
+}
+
+export interface UsersListResponse {
+  users: ManagedUser[]
+}
+
+export interface UserResponse {
+  user: ManagedUser
+}

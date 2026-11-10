@@ -24,6 +24,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT / "lambdas"))
 
 JOBS_TABLE_NAME = "RedactionJobs-test"
+TEST_USER_ID = "user-1"
 
 
 def _api_gateway_event(job_id: str) -> dict:
@@ -32,7 +33,7 @@ def _api_gateway_event(job_id: str) -> dict:
         "routeKey": "GET /jobs/{jobId}",
         "headers": {},
         "pathParameters": {"jobId": job_id},
-        "requestContext": {"http": {"method": "GET", "path": "/jobs/" + job_id}},
+        "requestContext": {"authorizer": {"jwt": {"claims": {"sub": TEST_USER_ID}}}, "http": {"method": "GET", "path": "/jobs/" + job_id}},
     }
 
 
@@ -80,6 +81,7 @@ def test_existing_processing_job_returns_200(
     mocked_jobs_table.put_item(
         Item={
             "jobId": "job-1",
+            "ownerId": TEST_USER_ID,
             "status": "processing",
             "sourceKey": "job-1/sample.docx",
             "sourceExtension": ".docx",
@@ -110,6 +112,7 @@ def test_existing_completed_job_returns_200_with_status(
     mocked_jobs_table.put_item(
         Item={
             "jobId": "job-2",
+            "ownerId": TEST_USER_ID,
             "status": "completed",
             "sourceKey": "job-2/sample.pdf",
             "sourceExtension": ".pdf",
@@ -141,6 +144,7 @@ def test_existing_failed_job_includes_error_message(
     mocked_jobs_table.put_item(
         Item={
             "jobId": "job-3",
+            "ownerId": TEST_USER_ID,
             "status": "failed",
             "sourceKey": "job-3/sample.docx",
             "sourceExtension": ".docx",
@@ -179,6 +183,7 @@ def test_completed_job_returns_detection_summary(
     mocked_jobs_table.put_item(
         Item={
             "jobId": "job-4",
+            "ownerId": TEST_USER_ID,
             "status": "completed",
             "sourceKey": "job-4/sample.pdf",
             "sourceExtension": ".pdf",

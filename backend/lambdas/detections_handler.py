@@ -24,6 +24,8 @@ from typing import Any, Dict, Optional
 
 import boto3
 
+from request_auth import caller_id, unauthorized_response
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -83,9 +85,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if not job_id:
         return _job_not_found_response()
 
+    caller = caller_id(event)
+    if caller is None:
+        return unauthorized_response()
+
     response = _get_jobs_table().get_item(Key={"jobId": job_id})
     job_item = response.get("Item")
-    if job_item is None:
+    # A job owned by someone else is reported exactly like a missing one,
+    # so job ids cannot be probed.
+    if job_item is None or job_item.get("ownerId") != caller:
         return _job_not_found_response()
 
     if job_item.get("status") != "detected":
