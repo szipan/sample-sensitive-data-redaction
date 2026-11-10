@@ -103,7 +103,7 @@ Libraries in `pillow.libs/` of the wheel
 (the Linux ARM64 / CPython 3.12 wheel bundled for the AgentCore runtime),
 matched section by section against the wheel's
 `pillow-13.0.0.dist-info/licenses/LICENSE` and its CycloneDX SBOM
-`pillow-13.0.0.dist-info/sboms/`):
+(`pillow-13.0.0.dist-info/sboms/`):
 
 | Component | File in `pillow.libs/` | License (SPDX) |
 | --- | --- | --- |
@@ -126,9 +126,9 @@ Optional components listed in the SBOM that are not part of this wheel:
 
 - libimagequant (GPL-3.0-or-later): marked optional in the SBOM. No
   `libimagequant` library is in `pillow.libs/`, and the compiled modules
-  contain none of its API symbols `liq_*`), so it is not linked.
+  contain none of its API symbols (`liq_*`), so it is not linked.
 - FriBiDi (LGPL-2.1-or-later): marked optional in the SBOM. Pillow ships only
-  a small runtime-loading shim `fribidi-shim`, MIT-CMU) that loads a system
+  a small runtime-loading shim (`fribidi-shim`, MIT-CMU) that loads a system
   `libfribidi` if one is installed. No FriBiDi library is bundled, and this
   project does not install one.
 
