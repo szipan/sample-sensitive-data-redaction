@@ -422,6 +422,35 @@ def test_jobs_table_has_ttl(template_json):
     }
 
 
+def test_every_log_group_expires_after_one_day(template_json):
+    """Each Lambda function (app handlers and CDK custom-resource
+    functions) and the AgentCore runtime log group get a 1-day retention
+    that is removed with the stack. The LogRetention function is the only
+    exception: it sets 1 day on its own log group."""
+    resources = template_json["Resources"]
+    retentions = [r["Properties"] for r in resources.values() if r["Type"] == "Custom::LogRetention"]
+    assert retentions
+    for props in retentions:
+        assert props["RetentionInDays"] == 1
+        assert props["RemovalPolicy"] == "destroy"
+
+    covered = set()
+    agent_groups = 0
+    for props in retentions:
+        parts = props["LogGroupName"]["Fn::Join"][1]
+        if parts[0] == "/aws/lambda/":
+            covered.add(parts[1]["Ref"])
+        elif parts[0] == "/aws/bedrock-agentcore/runtimes/":
+            agent_groups += 1
+    functions = {
+        logical_id for logical_id, r in resources.items()
+        if r["Type"] == "AWS::Lambda::Function" and not logical_id.startswith("LogRetention")
+    }
+    assert functions and covered == functions
+    assert agent_groups == 1
+    assert len(retentions) == len(functions) + 1
+
+
 def test_agent_delete_permission_is_scoped(template_json):
     import json as _json
 

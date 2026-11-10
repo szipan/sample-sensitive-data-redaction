@@ -32,7 +32,7 @@ API Gateway HTTP API:
 import re
 from typing import Optional
 
-from aws_cdk import CfnOutput, CustomResource, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, CfnResource, CustomResource, Duration, Fn, RemovalPolicy, Stack
 from aws_cdk import aws_apigatewayv2 as apigwv2
 from aws_cdk import aws_apigatewayv2_authorizers as apigwv2_authorizers
 from aws_cdk import aws_apigatewayv2_integrations as apigwv2_integrations
@@ -65,6 +65,11 @@ from shared.builtin_rules import BUILT_IN_RULES
 # records) are kept. After this the S3 lifecycle rule and the DynamoDB TTL
 # remove them, so unredacted source text cannot linger indefinitely.
 DOCUMENT_RETENTION_DAYS = 1
+
+# Retention of every log group the stack controls (Lambda and AgentCore).
+# Logs are PII-free by design and only used to troubleshoot recent jobs, so
+# they are kept no longer than the documents themselves.
+LOG_RETENTION = logs.RetentionDays.ONE_DAY
 
 # Cognito group of administrators (manage users and rules). Everyone else
 # is a regular user who uploads documents and works with their own jobs.
@@ -819,21 +824,10 @@ class RedactionStack(Stack):
         # `ResourceAlreadyExistsException`, so it works whether the group
         # exists yet or not.
         #
-        # 90 days, justified rather than picked: these records are PII-free
-        # by construction (that is the point of the logging design), so this
-        # window is an operational-lookback period rather than a
-        # data-subject deletion obligation. The audit record of what was
-        # redacted is `RedactionJob.detectionSummary` in DynamoDB and is not
-        # governed by this setting. 90 days covers a quarterly compliance
-        # review cycle and the window in which anyone asks why a document
-        # came back over-redacted. Indefinite retention is the thing being
-        # ruled out — a compliance product should be able to answer "how
-        # long do you keep logs about redaction jobs" with a number.
-        #
-        # `removal_policy` is deliberately left at its `RETAIN` default:
-        # `cdk destroy` should not take the last quarter's operational
-        # record with it, unlike the source and output buckets which are
-        # `DESTROY` on purpose.
+        # Retention is LOG_RETENTION (1 day), the same as the documents:
+        # the logs are only for troubleshooting a recent job, and there is
+        # no reason to keep records about a job longer than the job itself.
+        # `DESTROY` so `cdk destroy` leaves nothing behind.
         #
         # One caveat: the group name embeds `AgentRuntimeId`, so replacing
         # the runtime produces a new group and this resource follows the new
@@ -843,7 +837,8 @@ class RedactionStack(Stack):
             self,
             "AgentRuntimeLogRetention",
             log_group_name=self.agent_runtime.application_log_group.log_group_name,
-            retention=logs.RetentionDays.THREE_MONTHS,
+            retention=LOG_RETENTION,
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         # `JobDispatcher`: triggered by DynamoDB Streams on the
@@ -1100,3 +1095,33 @@ class RedactionStack(Stack):
             methods=[apigwv2.HttpMethod.POST],
             integration=users_integration,
         )
+
+        # Last, so every function defined above is covered.
+        self._limit_lambda_log_retention()
+
+    def _limit_lambda_log_retention(self) -> None:
+        """Give every Lambda function in the stack a LOG_RETENTION log group.
+
+        Lambda creates `/aws/lambda/<function name>` itself on first
+        invocation with no expiry, so without this its logs would be kept
+        forever. This covers the app's handlers and the functions CDK adds
+        for custom resources (bucket auto-delete, provider frameworks). The
+        LogRetention function itself is skipped: it sets a 1-day retention on
+        its own log group, and pointing a LogRetention at it would be a
+        circular dependency.
+        """
+        functions = [
+            node
+            for node in self.node.find_all()
+            if isinstance(node, CfnResource)
+            and node.cfn_resource_type == "AWS::Lambda::Function"
+            and not node.node.scope.node.id.startswith("LogRetention")
+        ]
+        for function in functions:
+            logs.LogRetention(
+                self,
+                f"FunctionLogRetention{function.node.addr[-8:]}",
+                log_group_name=Fn.join("", ["/aws/lambda/", function.ref]),
+                retention=LOG_RETENTION,
+                removal_policy=RemovalPolicy.DESTROY,
+            )

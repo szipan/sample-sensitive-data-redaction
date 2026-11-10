@@ -57,6 +57,50 @@ aws iam attach-user-policy --user-name <YOUR_DEPLOY_USER> --policy-arn <POLICY_A
 
 > **注意**:默认 `cdk bootstrap` 的 CloudFormation 执行角色是 `AdministratorAccess`,并且同账号、同区域的所有 CDK 应用共用。要把资源创建权限也收敛到本应用,需要用独立 qualifier 做一次 bootstrap,并把 [`docs/least-privilege-cfn-exec-policy.json`](docs/least-privilege-cfn-exec-policy.json) 挂给执行角色。步骤、依据和未验证的部分见 [`docs/least-privilege-deploy-policy.md`](docs/least-privilege-deploy-policy.md)。
 
+### 数据驻留与合规提醒(部署前请阅读)
+
+本应用处理的是未脱敏的客户文档。应用自身只短期保留这些数据(见下表),但下面几项受**账号级配置**影响,应用无法控制,请根据贵司的合规要求自行决定如何处理。
+
+#### 1. Bedrock 模型调用日志(最需要关注)
+
+检测 PII 和图片 OCR 时,应用会把文档文本和页面/内嵌图片发给 Bedrock 模型(Claude Haiku 4.5 / Sonnet 4.5)。如果目标账号在该 region 开启了 [Bedrock 模型调用日志](https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html),并打开了文本或图片投递,**每次调用的完整输入和输出(即未脱敏的原文和图片)会被写入 CloudWatch Logs 或 S3**,保留期由该日志配置决定,默认永不过期。
+
+这是账号 + region 级别的设置,对账号里所有应用生效,不能按角色或应用排除。部署前请检查:
+
+```bash
+aws bedrock get-model-invocation-logging-configuration --region us-west-2
+# 返回为空: 未开启
+# 返回 loggingConfig 且 textDataDeliveryEnabled / imageDataDeliveryEnabled 为 true:
+#   本应用处理的文档内容会被记录到 cloudWatchConfig.logGroupName 或 s3Config.bucketName
+```
+
+如果已开启,可选的做法(均会影响该账号里其他使用 Bedrock 的应用,请与账号负责人确认):
+
+- 把本应用部署到一个**未开启调用日志的独立账号**(生产环境推荐);
+- 关闭调用日志,或只关闭文本/图片投递;
+- 保留调用日志,但给目标日志组设置短保留期(或给目标 S3 桶加生命周期规则),并限制谁能读取。
+
+注意:关闭或缩短保留期不会只删除本应用产生的历史记录;CloudWatch Logs 不支持按调用方选择性删除。如果已经用真实文档测试过,请一并评估已有的记录。
+
+#### 2. Amazon Textract 与 AI 服务退出策略
+
+页面 OCR 会把页面图片以同步方式(`DetectDocumentText`,直接传字节)发给 Textract,应用不在 Textract 留存任何内容。但按 AWS 的服务条款,Textract 等 AI 服务可能保存和使用输入内容用于改进服务,除非在 AWS Organizations 里配置了 [AI 服务退出策略](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_ai-opt-out.html)。如有要求,请由组织管理员确认或配置。Bedrock 不会用客户的输入输出训练模型。
+
+#### 3. 应用自身的数据保留
+
+| 位置 | 内容 | 保留 |
+| --- | --- | --- |
+| 源文件桶 | 上传的原始文档 | 作业完成即删除;未完成的由生命周期规则在 1 天后过期 |
+| 输出桶 | 脱敏后的文档;待审核的检测结果 `detections.json`(含 PII 片段) | `detections.json` 在作业离开审核状态时删除;其余由生命周期规则在 1 天后过期 |
+| `RedactionJobs` 表 | 作业状态、文件名(不含文档内容) | DynamoDB TTL 1 天;表的 stream 保留 24 小时 |
+| `RedactionRules` 表 | 管理员配置的脱敏规则 | 永久,由管理员维护。如果规则里写了具体人名、号码等,这些规则本身即是 PII |
+| Lambda / AgentCore 日志 | 作业 ID、状态、异常类型(代码不记录文档内容) | CloudWatch 日志组保留 1 天(`LOG_RETENTION`),随栈一起删除 |
+
+两点说明:
+
+- S3 生命周期和 DynamoDB TTL 都是异步执行的,实际删除可能比设定的 1 天晚一到两天。需要更严格的上限时,请另加定时清理。
+- 前端下载的脱敏文件和用户本地的原始文档不在本应用的管理范围内。
+
 ## 一、后端部署
 
 所有命令在 `backend/` 目录下执行。
