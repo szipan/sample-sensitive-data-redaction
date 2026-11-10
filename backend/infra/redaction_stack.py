@@ -1109,6 +1109,10 @@ class RedactionStack(Stack):
         LogRetention function itself is skipped: it sets a 1-day retention on
         its own log group, and pointing a LogRetention at it would be a
         circular dependency.
+
+        Known leftover: the custom-resource functions run once more when the
+        stack is deleted and Lambda re-creates their (empty, PII-free) log
+        groups after CloudFormation removed them. Not worth more machinery.
         """
         functions = [
             node
