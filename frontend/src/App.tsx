@@ -50,11 +50,19 @@ function App() {
       </header>
       <main className="app-content">
         {!signedIn ? (
-          <div className="app-card app-card-narrow">
+          <div className="app-card app-card-login">
             <LoginView session={authSession} />
           </div>
         ) : (
-          <div className={current === 'document' ? 'app-card app-card-narrow' : 'app-card'}>
+          <div
+            className={
+              current === 'document'
+                ? 'app-card app-card-narrow'
+                : current === 'users'
+                  ? 'app-card app-card-users'
+                  : 'app-card'
+            }
+          >
             {current === 'document' && <UploadView apiClient={apiClient} />}
             {current === 'rules' && <RuleManagementView apiClient={apiClient} />}
             {current === 'users' && <UserManagementView apiClient={apiClient} />}

@@ -175,6 +175,8 @@ export function UserManagementView({
           <button type="submit" className="btn-primary" disabled={busy}>
             {t('users.invite')}
           </button>
+          {/* Takes 2/3 of the free space, so the email input (flex 1) gets 1/3 */}
+          <div aria-hidden="true" style={{ flex: 2 }} />
         </div>
         <p style={{ fontSize: '12px', color: 'var(--color-fg-subtle)' }}>{t('users.inviteHint')}</p>
       </form>

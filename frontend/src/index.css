@@ -149,6 +149,21 @@ body,
   margin: 0 auto;
 }
 
+/* 用户管理 page: half the content width, centered (never narrower than 640px
+   so the four-column table and action buttons fit; full width on small screens). */
+.app-card-users {
+  width: 50%;
+  min-width: min(100%, 640px);
+  margin: 0 auto;
+}
+
+/* Sign-in page: 40% of the 文档处理 card (60% -> 24% width, 760px -> 304px floor). */
+.app-card-login {
+  width: 24%;
+  min-width: min(100%, 304px);
+  margin: 0 auto;
+}
+
 /* Typography */
 h1, h2, h3, h4 {
   color: var(--color-fg-default);
