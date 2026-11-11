@@ -82,6 +82,32 @@
       ]
     },
     {
+      "Sid": "ApiLogGroup",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:*RetentionPolicy",
+        "logs:*agResource",
+        "logs:ListTagsForResource",
+        "logs:*DataProtectionPolicy"
+      ],
+      "Resource": "arn:aws:logs:*:*:log-group:/aws/apigateway/PiiDocumentRedactionPocApi-access*"
+    },
+    {
+      "Sid": "ApiLogDelivery",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:DescribeIndexPolicies",
+        "logs:DescribeResourcePolicies",
+        "logs:*LogDelivery",
+        "logs:ListLogDeliveries",
+        "logs:PutResourcePolicy"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "UserPool",
       "Effect": "Allow",
       "Action": [

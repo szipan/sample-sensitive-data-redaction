@@ -29,6 +29,7 @@ API Gateway HTTP API:
   real handler. The shared placeholder Lambda (`lambdas/placeholder.py`) is
   still defined but unused by any route; removing it is out of scope here.
 """
+import json
 import re
 from typing import Optional
 
@@ -70,6 +71,21 @@ DOCUMENT_RETENTION_DAYS = 1
 # Logs are PII-free by design and only used to troubleshoot recent jobs, so
 # they are kept no longer than the documents themselves.
 LOG_RETENTION = logs.RetentionDays.ONE_DAY
+
+# HTTP API access log group and the fields written for each request. Only
+# request metadata is logged; `userSub` is the caller's opaque Cognito user ID.
+API_ACCESS_LOG_GROUP_NAME = "/aws/apigateway/PiiDocumentRedactionPocApi-access"
+API_ACCESS_LOG_FORMAT = {
+    "requestId": "$context.requestId",
+    "requestTime": "$context.requestTime",
+    "sourceIp": "$context.identity.sourceIp",
+    "userSub": "$context.authorizer.claims.sub",
+    "httpMethod": "$context.httpMethod",
+    "routeKey": "$context.routeKey",
+    "status": "$context.status",
+    "responseLength": "$context.responseLength",
+    "integrationError": "$context.integrationErrorMessage",
+}
 
 # Cognito group of administrators (manage users and rules). Everyone else
 # is a regular user who uploads documents and works with their own jobs.
@@ -206,6 +222,8 @@ class RedactionStack(Stack):
             "SourceDocumentsBucket",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
+            # Bucket policy denies any request that does not use TLS.
+            enforce_ssl=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="ExpireDocuments",
@@ -222,6 +240,8 @@ class RedactionStack(Stack):
             "OutputDocumentsBucket",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
+            # Bucket policy denies any request that does not use TLS.
+            enforce_ssl=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="ExpireDocuments",
@@ -1024,6 +1044,22 @@ class RedactionStack(Stack):
         default_stage.default_route_settings = apigwv2.CfnStage.RouteSettingsProperty(
             throttling_rate_limit=API_THROTTLE_RATE_LIMIT,
             throttling_burst_limit=API_THROTTLE_BURST_LIMIT,
+        )
+
+        # API access logs: one JSON line per request with metadata only
+        # (who called which route, when, and the result). Request and
+        # response bodies are never logged. Kept for LOG_RETENTION, like
+        # every other log group in the stack.
+        self.api_access_log_group = logs.LogGroup(
+            self,
+            "ApiAccessLogs",
+            log_group_name=API_ACCESS_LOG_GROUP_NAME,
+            retention=LOG_RETENTION,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        default_stage.access_log_settings = apigwv2.CfnStage.AccessLogSettingsProperty(
+            destination_arn=self.api_access_log_group.log_group_arn,
+            format=json.dumps(API_ACCESS_LOG_FORMAT, separators=(",", ":")),
         )
 
         CfnOutput(self, "ApiUrl", value=self.http_api.api_endpoint)

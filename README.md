@@ -95,6 +95,7 @@ aws bedrock get-model-invocation-logging-configuration --region us-west-2
 | `RedactionJobs` 表 | 作业状态、文件名(不含文档内容) | DynamoDB TTL 1 天;表的 stream 保留 24 小时 |
 | `RedactionRules` 表 | 管理员配置的脱敏规则 | 永久,由管理员维护。如果规则里写了具体人名、号码等,这些规则本身即是 PII |
 | Lambda / AgentCore 日志 | 作业 ID、状态、异常类型(代码不记录文档内容) | CloudWatch 日志组保留 1 天(`LOG_RETENTION`),随栈一起删除。`cdk destroy` 后可能留下几个空的 `/aws/lambda/PiiDocumentRedactionPocSt-*` 日志组(自定义资源背后的函数在删除时最后调用一次),里面没有文档内容,可手动删除 |
+| API 访问日志 | 每个请求一行 JSON:请求 ID、时间、来源 IP、调用者的 Cognito 用户 ID(`sub`)、方法、路由、状态码、响应大小(不记录请求和响应内容) | 日志组 `/aws/apigateway/PiiDocumentRedactionPocApi-access` 保留 1 天(`LOG_RETENTION`),随栈一起删除 |
 
 两点说明:
 

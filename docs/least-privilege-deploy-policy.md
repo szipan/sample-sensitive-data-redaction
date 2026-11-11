@@ -19,7 +19,7 @@ CloudTrail 显示,用现代 CDK bootstrap 部署时:
 - **资源全部由 CloudFormation 执行角色创建**(`cdk-hnb659fds-cfn-exec-role`):Lambda、S3、DynamoDB、SQS、API Gateway、Cognito、Bedrock Guardrail、AgentCore Runtime、IAM 角色。
 - 本应用没有 Docker 镜像资产,所以不需要 `image-publishing-role` 和 ECR 推送权限。
 
-两份策略都通过了 IAM Access Analyzer `validate-policy`(0 个问题),压缩后分别约 2.3KB 和 4.6KB,在托管策略 6144 字符上限内。另用 IAM 策略模拟器核对了 66 个用例:实际用到的调用(含更新和删除)全部放行;越权调用全部拒绝,比如部署身份直接创建 Lambda、操作其他应用的栈、挂 `AdministratorAccess`、把角色传给 EC2。
+两份策略都通过了 IAM Access Analyzer `validate-policy`(0 个问题),压缩后分别约 2.3KB 和 6.1KB,在托管策略 6144 字符上限内。另用 IAM 策略模拟器核对了 66 个用例:实际用到的调用(含更新和删除)全部放行;越权调用全部拒绝,比如部署身份直接创建 Lambda、操作其他应用的栈、挂 `AdministratorAccess`、把角色传给 EC2。
 
 ## 部署身份策略(`least-privilege-deploy-policy.json`)
 
@@ -79,6 +79,7 @@ cdk bootstrap aws://$ACCOUNT/us-west-2 \
   - 只允许为 `bedrock-agentcore` 创建服务关联角色,全新账号首次创建 Runtime 时需要。
 - **AgentCore**:Runtime `pii_redaction_agent-*` 及其 workload identity。
 - **KMS**:只能经由 S3、Lambda、SQS、DynamoDB 使用(`kms:ViaService` 条件),对应各服务的 AWS 托管密钥。
+- **CloudWatch Logs**:`ApiLogGroup` 只允许创建、删除和配置 API 访问日志组 `/aws/apigateway/PiiDocumentRedactionPocApi-access`;`ApiLogDelivery` 是 API Gateway 开启访问日志时要求的日志投递权限(`*LogDelivery`、`PutResourcePolicy` 等),这些动作不支持资源级限定,只能用 `"Resource": "*"`。
 
 以下三组保留了服务级通配的动作,资源已限定:
 

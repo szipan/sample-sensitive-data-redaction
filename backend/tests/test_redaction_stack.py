@@ -25,6 +25,7 @@ Synth stages `agent_bundle/package_clean` as an asset, so the stack is built
 with the working directory pinned to the backend root (where `app.py` and
 that bundle live); the synth is done once per module because it is not cheap.
 """
+import json
 import os
 import sys
 from pathlib import Path
@@ -584,3 +585,38 @@ def test_agent_execution_role_trust_has_confused_deputy_conditions(template_json
     source_arn = _render(cond["ArnLike"]["aws:SourceArn"])
     assert source_arn.endswith(":bedrock-agentcore:%s:%s:*" % (TEST_REGION, TEST_ACCOUNT)), source_arn
     assert source_arn.startswith(("arn:aws:", "arn:${AWS::Partition}:")), source_arn
+
+
+def test_document_buckets_deny_requests_without_tls(template_json):
+    """Both document buckets carry a bucket-policy statement that denies every
+    request made without TLS (aws:SecureTransport = false)."""
+    resources = template_json["Resources"]
+    buckets = [k for k, v in resources.items() if v["Type"] == "AWS::S3::Bucket"]
+    assert len(buckets) == 2
+    for bucket in buckets:
+        policies = [
+            v["Properties"]["PolicyDocument"]["Statement"]
+            for v in resources.values()
+            if v["Type"] == "AWS::S3::BucketPolicy"
+            and v["Properties"]["Bucket"] == {"Ref": bucket}
+        ]
+        assert len(policies) == 1, bucket
+        assert any(
+            stmt["Effect"] == "Deny"
+            and stmt.get("Condition", {}).get("Bool", {}).get("aws:SecureTransport") == "false"
+            for stmt in policies[0]
+        ), bucket
+
+
+def test_api_stage_writes_access_logs_without_bodies(template_json):
+    """The HTTP API stage writes JSON access logs to a dedicated log group that
+    keeps them for one day. The format records request metadata only."""
+    resources = template_json["Resources"]
+    (stage,) = [v["Properties"] for v in resources.values() if v["Type"] == "AWS::ApiGatewayV2::Stage"]
+    settings = stage["AccessLogSettings"]
+    log_groups = {k: v["Properties"] for k, v in resources.items() if v["Type"] == "AWS::Logs::LogGroup"}
+    (target,) = [k for k in log_groups if settings["DestinationArn"] == {"Fn::GetAtt": [k, "Arn"]}]
+    assert log_groups[target]["RetentionInDays"] == 1
+    fields = json.loads(settings["Format"])
+    assert {"requestId", "routeKey", "status", "userSub"} <= set(fields)
+    assert not any("body" in value.lower() for value in fields.values())
