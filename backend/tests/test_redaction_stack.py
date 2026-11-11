@@ -425,31 +425,100 @@ def test_jobs_table_has_ttl(template_json):
 
 def test_every_log_group_expires_after_one_day(template_json):
     """Each Lambda function (app handlers and CDK custom-resource
-    functions) and the AgentCore runtime log group get a 1-day retention
-    that is removed with the stack. The LogRetention function is the only
-    exception: it sets 1 day on its own log group."""
+    functions) gets a stack-owned log group with a 1-day retention that is
+    removed with the stack."""
     resources = template_json["Resources"]
-    retentions = [r["Properties"] for r in resources.values() if r["Type"] == "Custom::LogRetention"]
-    assert retentions
-    for props in retentions:
-        assert props["RetentionInDays"] == 1
-        assert props["RemovalPolicy"] == "destroy"
+    groups = [r for r in resources.values() if r["Type"] == "AWS::Logs::LogGroup"]
+    for group in groups:
+        assert group["Properties"]["RetentionInDays"] == 1
+        assert group["DeletionPolicy"] == "Delete"
 
     covered = set()
-    agent_groups = 0
-    for props in retentions:
-        parts = props["LogGroupName"]["Fn::Join"][1]
-        if parts[0] == "/aws/lambda/":
-            covered.add(parts[1]["Ref"])
-        elif parts[0] == "/aws/bedrock-agentcore/runtimes/":
-            agent_groups += 1
+    for group in groups:
+        name = group["Properties"]["LogGroupName"]
+        if isinstance(name, dict) and name["Fn::Join"][1][0] == "/aws/lambda/":
+            covered.add(name["Fn::Join"][1][1]["Ref"])
     functions = {
-        logical_id for logical_id, r in resources.items()
-        if r["Type"] == "AWS::Lambda::Function" and not logical_id.startswith("LogRetention")
+        logical_id for logical_id, r in resources.items() if r["Type"] == "AWS::Lambda::Function"
     }
     assert functions and covered == functions
-    assert agent_groups == 1
-    assert len(retentions) == len(functions) + 1
+
+
+def _sdk_calls(template_json):
+    """`Custom::AWS` resources with their Create/Update/Delete calls rendered
+    as text (the calls are JSON strings joined with CloudFormation tokens)."""
+    calls = {}
+    for logical_id, r in template_json["Resources"].items():
+        if r["Type"] == "Custom::AWS":
+            calls[logical_id] = {
+                key: json.dumps(r["Properties"].get(key)) for key in ("Create", "Update", "Delete")
+            }
+    return calls
+
+
+def test_agent_runtime_log_group_expires_after_one_day(template_json):
+    """AgentCore creates the runtime's log group itself while the runtime is
+    created, so the stack cannot own it as an AWS::Logs::LogGroup. Custom
+    resources create it if missing, set a 1-day retention, and delete it
+    with the stack."""
+    calls = _sdk_calls(template_json).values()
+    agent = [c for c in calls if "/aws/bedrock-agentcore/runtimes/" in c["Create"]]
+    retention = [c for c in agent if "putRetentionPolicy" in c["Create"]]
+    assert len(retention) == 1
+    assert '\\"retentionInDays\\":1' in retention[0]["Create"]
+    assert "putRetentionPolicy" in retention[0]["Update"]
+    create = [c for c in agent if "createLogGroup" in c["Create"]]
+    assert len(create) == 1
+    assert "ResourceAlreadyExistsException" in create[0]["Create"]
+    assert "deleteLogGroup" in create[0]["Delete"]
+
+
+def test_log_retention_needs_no_wildcard_logs_permission(template_json):
+    """No role may change log retention or create/delete log groups on "*"
+    (the aws-cdk-lib LogRetention provider grants
+    `logs:PutRetentionPolicy` on "*"). The AgentCore log group custom
+    resources are limited to that one group."""
+    resources = template_json["Resources"]
+    assert not [r for r in resources.values() if r["Type"] == "Custom::LogRetention"]
+    logs_statements = []
+    for r in resources.values():
+        if r["Type"] == "AWS::IAM::Policy":
+            documents = [r["Properties"]["PolicyDocument"]]
+        elif r["Type"] == "AWS::IAM::Role":
+            documents = [p["PolicyDocument"] for p in r["Properties"].get("Policies", [])]
+        else:
+            continue
+        for document in documents:
+            for statement in document["Statement"]:
+                actions = statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
+                if any(a in ("logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy", "logs:DeleteLogGroup") for a in actions):
+                    logs_statements.append(statement)
+    assert logs_statements
+    for statement in logs_statements:
+        resources_ = statement["Resource"] if isinstance(statement["Resource"], list) else [statement["Resource"]]
+        assert "*" not in resources_
+        for resource in resources_:
+            assert "/aws/bedrock-agentcore/runtimes/" in json.dumps(resource)
+
+
+def test_function_log_groups_exist_before_custom_resources_run(template_json):
+    """Custom resources are what invoke functions during deployment, so each
+    one depends on every function log group: no function runs before its
+    group exists (Lambda would otherwise create it with no expiry)."""
+    resources = template_json["Resources"]
+    function_groups = {
+        logical_id for logical_id, r in resources.items()
+        if r["Type"] == "AWS::Logs::LogGroup"
+        and isinstance(r["Properties"]["LogGroupName"], dict)
+        and r["Properties"]["LogGroupName"]["Fn::Join"][1][0] == "/aws/lambda/"
+    }
+    custom_resources = [
+        r for r in resources.values()
+        if r["Type"].startswith("Custom::") or r["Type"] == "AWS::CloudFormation::CustomResource"
+    ]
+    assert function_groups and custom_resources
+    for custom_resource in custom_resources:
+        assert function_groups <= set(custom_resource.get("DependsOn", []))
 
 
 def test_agent_delete_permission_is_scoped(template_json):
@@ -606,6 +675,22 @@ def test_document_buckets_deny_requests_without_tls(template_json):
             and stmt.get("Condition", {}).get("Bool", {}).get("aws:SecureTransport") == "false"
             for stmt in policies[0]
         ), bucket
+
+
+def test_rule_operations_queue_is_encrypted_and_denies_requests_without_tls(template_json):
+    resources = template_json["Resources"]
+    (queue_id,) = [k for k, v in resources.items() if v["Type"] == "AWS::SQS::Queue"]
+    assert resources[queue_id]["Properties"]["SqsManagedSseEnabled"] is True
+    policies = [
+        v["Properties"] for v in resources.values()
+        if v["Type"] == "AWS::SQS::QueuePolicy" and v["Properties"]["Queues"] == [{"Ref": queue_id}]
+    ]
+    assert len(policies) == 1
+    assert any(
+        stmt["Effect"] == "Deny"
+        and stmt.get("Condition", {}).get("Bool", {}).get("aws:SecureTransport") == "false"
+        for stmt in policies[0]["PolicyDocument"]["Statement"]
+    )
 
 
 def test_api_stage_writes_access_logs_without_bodies(template_json):

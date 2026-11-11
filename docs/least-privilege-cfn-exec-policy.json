@@ -82,7 +82,7 @@
       ]
     },
     {
-      "Sid": "ApiLogGroup",
+      "Sid": "LogGroups",
       "Effect": "Allow",
       "Action": [
         "logs:CreateLogGroup",
@@ -92,7 +92,7 @@
         "logs:ListTagsForResource",
         "logs:*DataProtectionPolicy"
       ],
-      "Resource": "arn:aws:logs:*:*:log-group:/aws/apigateway/PiiDocumentRedactionPocApi-access*"
+      "Resource": "arn:aws:logs:*:*:log-group:/aws/*/PiiDocumentRedactionPoc*"
     },
     {
       "Sid": "ApiLogDelivery",

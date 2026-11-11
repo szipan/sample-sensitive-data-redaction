@@ -79,7 +79,7 @@ cdk bootstrap aws://$ACCOUNT/us-west-2 \
   - 只允许为 `bedrock-agentcore` 创建服务关联角色,全新账号首次创建 Runtime 时需要。
 - **AgentCore**:Runtime `pii_redaction_agent-*` 及其 workload identity。
 - **KMS**:只能经由 S3、Lambda、SQS、DynamoDB 使用(`kms:ViaService` 条件),对应各服务的 AWS 托管密钥。
-- **CloudWatch Logs**:`ApiLogGroup` 只允许创建、删除和配置 API 访问日志组 `/aws/apigateway/PiiDocumentRedactionPocApi-access`;`ApiLogDelivery` 是 API Gateway 开启访问日志时要求的日志投递权限(`*LogDelivery`、`PutResourcePolicy` 等),这些动作不支持资源级限定,只能用 `"Resource": "*"`。
+- **CloudWatch Logs**:`LogGroups` 只允许创建、删除和配置本应用的日志组 `/aws/*/PiiDocumentRedactionPoc*`,即 API 访问日志组 `/aws/apigateway/PiiDocumentRedactionPocApi-access` 和各 Lambda 函数的 `/aws/lambda/PiiDocumentRedactionPocSt*`。这些日志组都由栈直接创建并设 1 天保留期。AgentCore Runtime 的日志组由 AgentCore 在创建 Runtime 时用 Runtime 的执行角色自己建,不经过 CloudFormation 执行角色;栈用只能操作这一个日志组的自定义资源设置保留期,并在删除栈时删除它;`ApiLogDelivery` 是 API Gateway 开启访问日志时要求的日志投递权限(`*LogDelivery`、`PutResourcePolicy` 等),这些动作不支持资源级限定,只能用 `"Resource": "*"`。
 
 以下三组保留了服务级通配的动作,资源已限定。直接用于生产前,应把它们收紧为 CloudFormation 实际调用的动作清单(见“未验证的部分”):
 
@@ -106,7 +106,7 @@ cdk bootstrap aws://$ACCOUNT/us-west-2 \
 - **Cognito 动作清单**:之前认为 CloudTrail 查不到 Cognito 事件,这是错的。按部署时间窗口查到了创建路径的 7 个动作,据此把 `cognito-idp:*` 换成明确清单,之后三次创建、一次更新、三次删除全部成功。
 - **带变更的更新**:临时改了 API 阶段限流、用户池(临时密码有效期)、用户池客户端(刷新令牌有效期)、两个 S3 桶的生命周期、一个 Lambda 的环境变量,部署成功;改回原值再部署一次,也成功。
 - **`cdk destroy`**:用最小权限身份执行,两个桶里各放了一个占位文件,桶被自动清空并删除;表、队列、Lambda、事件源映射、用户池、AgentCore Runtime、Guardrail、IAM 角色、API 都不残留。第一次 destroy 因缺少事件源映射的 Get/Delete 权限失败,补上后成功。
-- **日志组残留(已知,无害)**:删除栈时,自定义资源背后的 5 个 Lambda 会被最后调用一次,Lambda 异步投递日志,会在日志组被删之后把它重新建出来,且没有保留期。调整删除顺序没有用(事件时间线显示顺序正确,日志组仍被重建)。这 5 个函数的日志里只有桶名和 CloudFormation 请求信息,没有文档内容或用户数据,所以不再为此增加处理逻辑:destroy 后会留下几个空的、没有保留期的 `/aws/lambda/PiiDocumentRedactionPocSt-*` 日志组,可手动删除。
+- **日志组残留(已知,无害)**:删除栈时,自定义资源背后的 6 个 Lambda 会被最后调用一次,Lambda 异步投递日志,会在日志组被删之后把它重新建出来,且没有保留期。调整删除顺序没有用(事件时间线显示顺序正确,日志组仍被重建)。这 6 个函数的日志里只有桶名、日志组名和 CloudFormation 请求信息,没有文档内容或用户数据,所以不再为此增加处理逻辑:destroy 后会留下几个空的、没有保留期的 `/aws/lambda/PiiDocumentRedactionPocSt-*` 日志组,可手动删除。
 - **事件源映射加条件的尝试**(2026-11-11):给事件源映射的 Get/Update/Delete 加 `lambda:FunctionArn` 条件后,`cdk destroy` 先因删除后的确认查询 `GetEventSourceMapping` 被拒绝而失败,把 Get 改为无条件后,重试删除又因 `DeleteEventSourceMapping`(映射已不存在)被拒绝。因此恢复为无条件授权;恢复后重试删除、全新部署、`cdk destroy` 和再次全新部署都成功。
 
 ## 未验证的部分

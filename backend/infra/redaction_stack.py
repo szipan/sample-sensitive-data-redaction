@@ -33,7 +33,7 @@ import json
 import re
 from typing import Optional
 
-from aws_cdk import CfnOutput, CfnResource, CustomResource, Duration, Fn, RemovalPolicy, Stack
+from aws_cdk import ArnFormat, CfnOutput, CfnResource, CustomResource, Duration, Fn, RemovalPolicy, Stack
 from aws_cdk import aws_apigatewayv2 as apigwv2
 from aws_cdk import aws_apigatewayv2_authorizers as apigwv2_authorizers
 from aws_cdk import aws_apigatewayv2_integrations as apigwv2_integrations
@@ -71,6 +71,9 @@ DOCUMENT_RETENTION_DAYS = 1
 # Logs are PII-free by design and only used to troubleshoot recent jobs, so
 # they are kept no longer than the documents themselves.
 LOG_RETENTION = logs.RetentionDays.ONE_DAY
+# The same period as a number of days, for the CloudWatch Logs API call that
+# sets it on the AgentCore runtime log group.
+LOG_RETENTION_DAYS = 1
 
 # HTTP API access log group and the fields written for each request. Only
 # request metadata is logged; `userSub` is the caller's opaque Cognito user ID.
@@ -269,6 +272,11 @@ class RedactionStack(Stack):
             fifo=True,
             content_based_deduplication=False,
             visibility_timeout=Duration.seconds(30),
+            # Message bodies carry admin-authored rule patterns, which may be
+            # literal values to redact: encrypt at rest (SSE-SQS) explicitly
+            # and deny any request that does not use TLS.
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+            enforce_ssl=True,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -845,32 +853,87 @@ class RedactionStack(Stack):
             description="PII Document Redaction Agent - extracts, matches, and redacts PII from documents",
         )
 
-        # Retention_Period on the runtime's application log group.
-        # The AgentCore service — not this stack —
-        # creates `/aws/bedrock-agentcore/runtimes/{AgentRuntimeId}-DEFAULT`
-        # on first invocation, so `application_log_group` is an imported
-        # reference rather than an owned resource. `logs.LogRetention` is
-        # therefore the mechanism: its custom resource calls
-        # `CreateLogGroup` then `PutRetentionPolicy`, tolerating
-        # `ResourceAlreadyExistsException`, so it works whether the group
-        # exists yet or not.
+        # Retention on the runtime's application log group,
+        # `/aws/bedrock-agentcore/runtimes/{AgentRuntimeId}-DEFAULT`. The
+        # AgentCore service creates this group itself, with the execution
+        # role, while the runtime is being created, so the stack cannot own
+        # it as an `AWS::Logs::LogGroup` (CloudFormation only learns the name
+        # after the runtime exists, and then gets `AlreadyExists`).
+        #
+        # Two `AwsCustomResource`s set the retention instead. Their role may
+        # only act on this one log group, unlike the aws-cdk-lib LogRetention
+        # provider, whose role gets `logs:PutRetentionPolicy` on "*":
+        # - `AgentRuntimeLogGroupCreate` creates the group if it does not
+        #   exist yet (tolerating `ResourceAlreadyExistsException`, the
+        #   normal case) and deletes it with the stack.
+        # - `AgentRuntimeLogGroupRetention` then sets LOG_RETENTION.
         #
         # Retention is LOG_RETENTION (1 day), the same as the documents:
         # the logs are only for troubleshooting a recent job, and there is
         # no reason to keep records about a job longer than the job itself.
-        # `DESTROY` so `cdk destroy` leaves nothing behind.
         #
         # One caveat: the group name embeds `AgentRuntimeId`, so replacing
-        # the runtime produces a new group and this resource follows the new
-        # name, leaving the old group at whatever retention it had.
-        # Acceptable for a POC; a job for a future cleanup task.
-        logs.LogRetention(
-            self,
-            "AgentRuntimeLogRetention",
-            log_group_name=self.agent_runtime.application_log_group.log_group_name,
-            retention=LOG_RETENTION,
-            removal_policy=RemovalPolicy.DESTROY,
+        # the runtime produces a new group; the new physical ID makes
+        # CloudFormation delete the old group.
+        agent_log_group_name = self.agent_runtime.application_log_group.log_group_name
+        agent_log_group_arn = self.format_arn(
+            service="logs",
+            resource="log-group",
+            resource_name=agent_log_group_name,
+            arn_format=ArnFormat.COLON_RESOURCE_NAME,
         )
+        agent_log_group_resources = [agent_log_group_arn, f"{agent_log_group_arn}:*"]
+        agent_log_group_create = cr.AwsCustomResource(
+            self,
+            "AgentRuntimeLogGroupCreate",
+            on_create=cr.AwsSdkCall(
+                service="CloudWatchLogs",
+                action="createLogGroup",
+                parameters={"logGroupName": agent_log_group_name},
+                physical_resource_id=cr.PhysicalResourceId.of(agent_log_group_name),
+                ignore_error_codes_matching="ResourceAlreadyExistsException",
+            ),
+            on_delete=cr.AwsSdkCall(
+                service="CloudWatchLogs",
+                action="deleteLogGroup",
+                parameters={"logGroupName": agent_log_group_name},
+                ignore_error_codes_matching="ResourceNotFoundException",
+            ),
+            policy=cr.AwsCustomResourcePolicy.from_statements(
+                [
+                    iam.PolicyStatement(
+                        actions=["logs:CreateLogGroup", "logs:DeleteLogGroup"],
+                        resources=agent_log_group_resources,
+                    )
+                ]
+            ),
+            install_latest_aws_sdk=False,
+        )
+        set_agent_log_retention = cr.AwsSdkCall(
+            service="CloudWatchLogs",
+            action="putRetentionPolicy",
+            parameters={
+                "logGroupName": agent_log_group_name,
+                "retentionInDays": LOG_RETENTION_DAYS,
+            },
+            physical_resource_id=cr.PhysicalResourceId.of(agent_log_group_name),
+        )
+        agent_log_group_retention = cr.AwsCustomResource(
+            self,
+            "AgentRuntimeLogGroupRetention",
+            on_create=set_agent_log_retention,
+            on_update=set_agent_log_retention,
+            policy=cr.AwsCustomResourcePolicy.from_statements(
+                [
+                    iam.PolicyStatement(
+                        actions=["logs:PutRetentionPolicy"],
+                        resources=agent_log_group_resources,
+                    )
+                ]
+            ),
+            install_latest_aws_sdk=False,
+        )
+        agent_log_group_retention.node.add_dependency(agent_log_group_create)
 
         # `JobDispatcher`: triggered by DynamoDB Streams on the
         # `RedactionJobs` table (newly created items with `status ==
@@ -1158,27 +1221,45 @@ class RedactionStack(Stack):
         Lambda creates `/aws/lambda/<function name>` itself on first
         invocation with no expiry, so without this its logs would be kept
         forever. This covers the app's handlers and the functions CDK adds
-        for custom resources (bucket auto-delete, provider frameworks). The
-        LogRetention function itself is skipped: it sets a 1-day retention on
-        its own log group, and pointing a LogRetention at it would be a
-        circular dependency.
+        for custom resources (bucket auto-delete, provider frameworks), so it
+        works on CloudFormation resources rather than on the `log_group`
+        property, which the CDK-internal functions do not expose.
+
+        Each group is an `AWS::Logs::LogGroup` owned by the stack, so no
+        function needs `logs:PutRetentionPolicy` and `cdk destroy` removes
+        the groups. Custom resources are the only things that invoke a
+        function during deployment, so every custom resource depends on all
+        the groups: each group exists before its function first runs, so
+        Lambda never creates one without an expiry.
 
         Known leftover: the custom-resource functions run once more when the
-        stack is deleted and Lambda re-creates their (empty, PII-free) log
-        groups after CloudFormation removed them. Not worth more machinery.
+        stack is deleted, and Lambda's asynchronous log delivery can re-create
+        their (empty, PII-free) log groups after CloudFormation removed them.
         """
         functions = [
             node
             for node in self.node.find_all()
-            if isinstance(node, CfnResource)
-            and node.cfn_resource_type == "AWS::Lambda::Function"
-            and not node.node.scope.node.id.startswith("LogRetention")
+            if isinstance(node, CfnResource) and node.cfn_resource_type == "AWS::Lambda::Function"
         ]
-        for function in functions:
-            logs.LogRetention(
+        log_groups = [
+            logs.LogGroup(
                 self,
-                f"FunctionLogRetention{function.node.addr[-8:]}",
+                f"FunctionLogGroup{function.node.addr[-8:]}",
                 log_group_name=Fn.join("", ["/aws/lambda/", function.ref]),
                 retention=LOG_RETENTION,
                 removal_policy=RemovalPolicy.DESTROY,
             )
+            for function in functions
+        ]
+        custom_resources = [
+            node
+            for node in self.node.find_all()
+            if isinstance(node, CfnResource)
+            and (
+                node.cfn_resource_type.startswith("Custom::")
+                or node.cfn_resource_type == "AWS::CloudFormation::CustomResource"
+            )
+        ]
+        for custom_resource in custom_resources:
+            for log_group in log_groups:
+                custom_resource.node.add_dependency(log_group)
