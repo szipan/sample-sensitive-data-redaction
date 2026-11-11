@@ -81,7 +81,7 @@ cdk bootstrap aws://$ACCOUNT/us-west-2 \
 - **KMS**:只能经由 S3、Lambda、SQS、DynamoDB 使用(`kms:ViaService` 条件),对应各服务的 AWS 托管密钥。
 - **CloudWatch Logs**:`ApiLogGroup` 只允许创建、删除和配置 API 访问日志组 `/aws/apigateway/PiiDocumentRedactionPocApi-access`;`ApiLogDelivery` 是 API Gateway 开启访问日志时要求的日志投递权限(`*LogDelivery`、`PutResourcePolicy` 等),这些动作不支持资源级限定,只能用 `"Resource": "*"`。
 
-以下三组保留了服务级通配的动作,资源已限定:
+以下三组保留了服务级通配的动作,资源已限定。直接用于生产前,应把它们收紧为 CloudFormation 实际调用的动作清单(见“未验证的部分”):
 
 | Sid | 动作 | 资源 | 原因 |
 | --- | --- | --- | --- |
@@ -89,7 +89,7 @@ cdk bootstrap aws://$ACCOUNT/us-west-2 \
 | `AppFunctions` | `lambda:*` | 本应用函数 | 创建、更新、删除、调用自定义资源,版本间动作会变化 |
 | `HttpApi` / `UserPool` | `apigateway:*` / 明确的 17 个 `cognito-idp:*` 动作 | `/apis*`、`userpool/*` | API Gateway 按 HTTP 方法授权;Cognito 用户池 ID 是随机的,无法按名称限定,但动作已逐个列出(用户池、客户端、组的增删改查、标签),不含任何用户数据操作 |
 
-下列动作不支持资源级限定,只能用 `"Resource": "*"`:`bedrock:CreateGuardrail`、`bedrock-agentcore:CreateAgentRuntime`、`cognito-idp:CreateUserPool`、`lambda:GetAccountSettings`、`iam:GetAccountSummary`,以及 Lambda 事件源映射的 `Create/Get/Update/Delete/ListEventSourceMapping`。后一组是实测补上的:映射的授权资源是 `*` 而不是映射 ARN,所以按 `event-source-mapping:*` 限定会被拒绝。
+下列动作不支持资源级限定,只能用 `"Resource": "*"`:`bedrock:CreateGuardrail`、`bedrock-agentcore:CreateAgentRuntime`、`cognito-idp:CreateUserPool`、`lambda:GetAccountSettings`、`iam:GetAccountSummary`,以及 Lambda 事件源映射的 `Create/Get/Update/Delete/ListEventSourceMapping`。后一组是实测补上的:映射已经不存在时(删除后 CloudFormation 的确认查询、删除失败后的重试),Lambda 按资源 `*` 授权,请求里也没有函数 ARN,所以无论按 `event-source-mapping:*` 限定资源,还是加 `lambda:FunctionArn` 条件,都会被拒绝,栈会卡在 DELETE_FAILED(2026-11-11 实测两次)。代价是这个执行角色可以修改和删除账号里任何事件源映射;它只由 CloudFormation 使用,在独立 bootstrap 下也只服务本应用。
 
 `AgentRuntimeCreateTimeChecks` 是实测补上的:`CreateAgentRuntime` 会同时创建 DEFAULT 端点并打标签,这时 Runtime ID 还没生成,AgentCore 用字面量 `runtime/*` 检查 `CreateAgentRuntimeEndpoint` 和 `TagResource`,按名称限定的 `runtime/pii_redaction_agent-*` 匹配不上,只能放开到 `runtime/*`。删除 Runtime 时还要 `DeleteAgentRuntimeEndpoint`,它能按名称限定,已放在 `AgentRuntime` 语句里。这几项 CloudTrail 和错误信息里都看不到(CloudFormation 只报 `Access denied for operation 'AWS::BedrockAgentCore::Runtime'`),是用同一策略直接调用 API 才查出来的。
 
@@ -107,10 +107,11 @@ cdk bootstrap aws://$ACCOUNT/us-west-2 \
 - **带变更的更新**:临时改了 API 阶段限流、用户池(临时密码有效期)、用户池客户端(刷新令牌有效期)、两个 S3 桶的生命周期、一个 Lambda 的环境变量,部署成功;改回原值再部署一次,也成功。
 - **`cdk destroy`**:用最小权限身份执行,两个桶里各放了一个占位文件,桶被自动清空并删除;表、队列、Lambda、事件源映射、用户池、AgentCore Runtime、Guardrail、IAM 角色、API 都不残留。第一次 destroy 因缺少事件源映射的 Get/Delete 权限失败,补上后成功。
 - **日志组残留(已知,无害)**:删除栈时,自定义资源背后的 5 个 Lambda 会被最后调用一次,Lambda 异步投递日志,会在日志组被删之后把它重新建出来,且没有保留期。调整删除顺序没有用(事件时间线显示顺序正确,日志组仍被重建)。这 5 个函数的日志里只有桶名和 CloudFormation 请求信息,没有文档内容或用户数据,所以不再为此增加处理逻辑:destroy 后会留下几个空的、没有保留期的 `/aws/lambda/PiiDocumentRedactionPocSt-*` 日志组,可手动删除。
+- **事件源映射加条件的尝试**(2026-11-11):给事件源映射的 Get/Update/Delete 加 `lambda:FunctionArn` 条件后,`cdk destroy` 先因删除后的确认查询 `GetEventSourceMapping` 被拒绝而失败,把 Get 改为无条件后,重试删除又因 `DeleteEventSourceMapping`(映射已不存在)被拒绝。因此恢复为无条件授权;恢复后重试删除、全新部署、`cdk destroy` 和再次全新部署都成功。
 
 ## 未验证的部分
 
-- **IAM Access Analyzer 策略生成**:上面的验证只覆盖本应用实际用到的动作。生产环境可以用 [策略生成](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html) 根据 CloudTrail 进一步收紧 `s3:*`、`lambda:*`、`apigateway:*` 这三个服务级通配。
+- **IAM Access Analyzer 策略生成**:上面的验证只覆盖本应用实际用到的动作。生产环境上线前,应使用 [策略生成](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html) 根据 CloudTrail 把 `s3:*`、`lambda:*`、`apigateway:*` 这三个服务级通配收紧为明确的动作清单。
 - **回滚路径**:第一次部署失败时 CloudFormation 用收紧后的角色回滚过一次,删除路径已经被 destroy 覆盖;但“更新失败后回滚到旧版本”(UPDATE_ROLLBACK)没有单独测过。
 - **账号和区域**:策略里的账号和区域是 `*`。固定只部署到 `us-west-2` 的话,可以把 ARN 里的 `*:*` 换成 `us-west-2:<账号ID>`,进一步收紧。
 
