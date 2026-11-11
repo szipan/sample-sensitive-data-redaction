@@ -902,7 +902,13 @@ class RedactionStack(Stack):
         self.job_dispatcher.add_event_source(
             lambda_event_sources.DynamoEventSource(
                 self.jobs_table,
-                starting_position=lambda_.StartingPosition.LATEST,
+                # TRIM_HORIZON, not LATEST: a new mapping takes a short while
+                # to start polling after deployment, and with LATEST any job
+                # written before that would never be dispatched and would stay
+                # in `processing`. Re-reading older records is harmless: the
+                # dispatcher only forwards INSERT records of `processing` jobs,
+                # and `handle_job` skips any job that is no longer `processing`.
+                starting_position=lambda_.StartingPosition.TRIM_HORIZON,
                 batch_size=10,
                 retry_attempts=2,
             )

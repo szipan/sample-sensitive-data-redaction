@@ -352,7 +352,7 @@ npm test
 
 **资源建到了错误的 region**: 见"部署前置条件"。需要在错误的 region 里 `cdk destroy` 清理,再在 us-west-2 重新部署。
 
-**任务一直是 processing,Agent 日志里也没有这个 jobId**: 说明任务还没派发到 Agent。`JobDispatcher` Lambda 从 DynamoDB Stream 读新任务并调用 `InvokeAgentRuntime`,这个调用要等 Agent 入口函数返回才结束。所以 `agent/main.py` 的入口必须立刻返回,把流水线放到后台线程里跑(并用 `app.add_async_task` 保持会话)。如果入口改回同步执行,审核模式的任务会让 Lambda 等满 300 秒超时,Stream 重试整批记录,后面上传的任务全部排队卡住。排查时看 `JobDispatcher` 日志里的 `Duration`,正常应在几秒内。`handle_job` 只处理状态为 `processing` 的任务,重复派发会被跳过。
+**任务一直是 processing,Agent 日志里也没有这个 jobId**: 说明任务还没派发到 Agent。`JobDispatcher` Lambda 从 DynamoDB Stream 读新任务并调用 `InvokeAgentRuntime`,这个调用要等 Agent 入口函数返回才结束。所以 `agent/main.py` 的入口必须立刻返回,把流水线放到后台线程里跑(并用 `app.add_async_task` 保持会话)。如果入口改回同步执行,审核模式的任务会让 Lambda 等满 300 秒超时,Stream 重试整批记录,后面上传的任务全部排队卡住。排查时看 `JobDispatcher` 日志里的 `Duration`,正常应在几秒内。`handle_job` 只处理状态为 `processing` 的任务,重复派发会被跳过。事件源映射从 `TRIM_HORIZON` 读取 Stream,所以全新部署后马上提交的任务也会被派发,只是要等映射开始工作,通常需要几十秒。
 
 **前端提示"处理超时"**: 任务确实处理很久,或后端卡住。先用 `GET /jobs/{jobId}` 看状态,再查 Agent 的 CloudWatch 日志。
 

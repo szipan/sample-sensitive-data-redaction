@@ -620,3 +620,17 @@ def test_api_stage_writes_access_logs_without_bodies(template_json):
     fields = json.loads(settings["Format"])
     assert {"requestId", "routeKey", "status", "userSub"} <= set(fields)
     assert not any("body" in value.lower() for value in fields.values())
+
+
+def test_job_dispatcher_reads_the_stream_from_trim_horizon(template_json):
+    """The DynamoDB Streams mapping that feeds JobDispatcher starts at
+    TRIM_HORIZON, so jobs created right after a deployment (before the new
+    mapping starts polling) are still dispatched."""
+    stream_mappings = [
+        v["Properties"]
+        for v in template_json["Resources"].values()
+        if v["Type"] == "AWS::Lambda::EventSourceMapping"
+        and "StartingPosition" in v["Properties"]
+    ]
+    assert len(stream_mappings) == 1, stream_mappings
+    assert stream_mappings[0]["StartingPosition"] == "TRIM_HORIZON"
