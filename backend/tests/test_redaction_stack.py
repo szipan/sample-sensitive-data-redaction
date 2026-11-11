@@ -553,3 +553,34 @@ def test_missing_admin_email_is_rejected():
         with pytest.raises(ValueError):
             validate_admin_email(bad)
     assert validate_admin_email(" Admin@Example.COM ") == "admin@example.com"
+
+
+def _render(value):
+    """Flatten a synthesized string value (literal, Ref or Fn::Join) for comparison."""
+    if isinstance(value, str):
+        return value
+    if "Ref" in value:
+        return "${" + value["Ref"] + "}"
+    if "Fn::Join" in value:
+        sep, parts = value["Fn::Join"]
+        return sep.join(_render(p) for p in parts)
+    raise AssertionError("unexpected intrinsic: %r" % (value,))
+
+
+def test_agent_execution_role_trust_has_confused_deputy_conditions(template_json):
+    """The AgentCore execution role may only be assumed by AgentCore resources
+    in this account and Region (aws:SourceAccount + aws:SourceArn), as the
+    AgentCore Runtime documentation requires for its trust policy."""
+    agent_trust = [
+        stmt
+        for res in template_json["Resources"].values()
+        if res["Type"] == "AWS::IAM::Role"
+        for stmt in res["Properties"]["AssumeRolePolicyDocument"]["Statement"]
+        if stmt.get("Principal", {}).get("Service") == "bedrock-agentcore.amazonaws.com"
+    ]
+    assert len(agent_trust) == 1, agent_trust
+    cond = agent_trust[0]["Condition"]
+    assert _render(cond["StringEquals"]["aws:SourceAccount"]) == TEST_ACCOUNT
+    source_arn = _render(cond["ArnLike"]["aws:SourceArn"])
+    assert source_arn.endswith(":bedrock-agentcore:%s:%s:*" % (TEST_REGION, TEST_ACCOUNT)), source_arn
+    assert source_arn.startswith(("arn:aws:", "arn:${AWS::Partition}:")), source_arn

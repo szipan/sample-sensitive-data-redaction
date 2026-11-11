@@ -659,7 +659,18 @@ class RedactionStack(Stack):
         self.agent_execution_role = iam.Role(
             self,
             "AgentExecutionRole",
-            assumed_by=iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+            # Confused-deputy protection, as the AgentCore Runtime documentation
+            # requires: only AgentCore resources in this account and Region may
+            # assume the role.
+            assumed_by=iam.ServicePrincipal(
+                "bedrock-agentcore.amazonaws.com",
+                conditions={
+                    "StringEquals": {"aws:SourceAccount": self.account},
+                    "ArnLike": {
+                        "aws:SourceArn": f"arn:{self.partition}:bedrock-agentcore:{self.region}:{self.account}:*"
+                    },
+                },
+            ),
             inline_policies={
                 "AgentRedactionPolicy": iam.PolicyDocument(
                     statements=[
