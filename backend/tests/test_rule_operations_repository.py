@@ -91,6 +91,23 @@ def test_create_then_get_by_id_round_trips_without_pattern(repository):
     assert fetched.pattern is None
 
 
+def test_create_writes_expires_at_one_day_ahead(repository):
+    """`create` stores `expiresAt` (epoch seconds) for the table's TTL; it
+    stays out of the `RuleOperation` dataclass."""
+    import time
+
+    from shared.rule_operations_repository import RULE_OPERATION_RETENTION_DAYS
+
+    before = int(time.time())
+    repository.create(_sample_operation(operationId="op-ttl"))
+    after = int(time.time())
+
+    item = repository._table.get_item(Key={"operationId": "op-ttl"})["Item"]
+    ttl = RULE_OPERATION_RETENTION_DAYS * 86400
+    assert before + ttl <= int(item["expiresAt"]) <= after + ttl
+    assert not hasattr(repository.get_by_id("op-ttl"), "expiresAt")
+
+
 def test_update_status_changes_status_and_error_reason(repository):
     operation = _sample_operation(operationId="op-3", status="processing")
     repository.create(operation)

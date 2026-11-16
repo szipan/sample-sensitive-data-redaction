@@ -46,7 +46,13 @@ frontend/                   React 前端
 
 ### 部署所需的最小 IAM 权限
 
-部署用的 IAM 身份(用户或角色均可)附加 [`docs/least-privilege-deploy-policy.json`](docs/least-privilege-deploy-policy.json) 即可跑 `cdk bootstrap` / `cdk deploy`。它只允许扮演 CDK bootstrap 角色、读取本应用的栈,并包含一次性的 bootstrap 权限,自身不能直接创建任何应用资源。
+`docs/` 里有一套可选的最小权限策略,按用途分开:
+
+- **日常部署策略** [`docs/least-privilege-deploy-policy.json`](docs/least-privilege-deploy-policy.json):长期附加给运行 `cdk deploy` / `cdk diff` 的部署身份(IAM 用户或角色均可)。它只能扮演 CDK 的 deploy / file-publishing / lookup 角色、读取本应用的栈,以及在本应用的用户池上做管理员恢复,自身不能创建任何资源,也不能修改 IAM。
+- **bootstrap 策略** [`docs/least-privilege-bootstrap-policy.json`](docs/least-privilege-bootstrap-policy.json):一次性的,只在运行 `cdk bootstrap` 时临时附加,完成后立即解除;以后重新 bootstrap(例如升级 CDK)时再临时挂上。它能修改 CDK bootstrap 角色,所以不能长期保留。
+- **执行角色策略和权限边界**:独立 bootstrap 时挂给 CloudFormation 执行角色的两份策略([`least-privilege-cfn-exec-policy.json`](docs/least-privilege-cfn-exec-policy.json)、[`least-privilege-cfn-exec-iam-policy.json`](docs/least-privilege-cfn-exec-iam-policy.json)),以及权限边界 [`least-privilege-app-boundary-policy.json`](docs/least-privilege-app-boundary-policy.json)(`PiiRedactionAppBoundary`)。执行角色只能创建带这个边界的 IAM 角色,边界限定了应用角色最多能访问哪些服务和资源。
+
+附加日常部署策略:
 
 ```bash
 aws iam create-policy --policy-name pii-redaction-deploy \
@@ -55,7 +61,7 @@ aws iam attach-user-policy --user-name <YOUR_DEPLOY_USER> --policy-arn <POLICY_A
 # 或: aws iam attach-role-policy --role-name <YOUR_DEPLOY_ROLE> --policy-arn <POLICY_ARN>
 ```
 
-> **注意**:默认 `cdk bootstrap` 的 CloudFormation 执行角色是 `AdministratorAccess`,并且同账号、同区域的所有 CDK 应用共用。要把资源创建权限也收敛到本应用,需要用独立 qualifier 做一次 bootstrap,并把 [`docs/least-privilege-cfn-exec-policy.json`](docs/least-privilege-cfn-exec-policy.json) 挂给执行角色。步骤、依据和未验证的部分见 [`docs/least-privilege-deploy-policy.md`](docs/least-privilege-deploy-policy.md)。
+> **注意**:默认 `cdk bootstrap` 的 CloudFormation 执行角色是 `AdministratorAccess`,并且同账号、同区域的所有 CDK 应用共用。要把资源创建权限也收敛到本应用,需要用独立 qualifier 做一次 bootstrap:创建三个托管策略,临时挂 bootstrap 策略做 `cdk bootstrap`(传两个执行策略),解除 bootstrap 策略,再在 `backend/cdk.json` 里加 qualifier 和 `@aws-cdk/core:permissionsBoundary` 两个 context。完整步骤、依据和未验证的部分见 [`docs/least-privilege-deploy-policy.md`](docs/least-privilege-deploy-policy.md)。
 
 ### 数据驻留与合规提醒(部署前请阅读)
 
@@ -94,6 +100,7 @@ aws bedrock get-model-invocation-logging-configuration --region us-west-2
 | 输出桶 | 脱敏后的文档;待审核的检测结果 `detections.json`(含 PII 片段) | `detections.json` 在作业离开审核状态时删除;其余由生命周期规则在 1 天后过期 |
 | `RedactionJobs` 表 | 作业状态、文件名(不含文档内容) | DynamoDB TTL 1 天;表的 stream 保留 24 小时 |
 | `RedactionRules` 表 | 管理员配置的脱敏规则 | 永久,由管理员维护。如果规则里写了具体人名、号码等,这些规则本身即是 PII |
+| `RuleOperations` 表 | 规则操作记录(可能含规则 pattern) | DynamoDB TTL 1 天 |
 | Lambda / AgentCore 日志 | 作业 ID、状态、异常类型(代码不记录文档内容) | CloudWatch 日志组保留 1 天(`LOG_RETENTION`),随栈一起删除。`cdk destroy` 后可能留下几个空的 `/aws/lambda/PiiDocumentRedactionPocSt-*` 日志组(自定义资源背后的函数在删除时最后调用一次),里面没有文档内容,可手动删除 |
 | API 访问日志 | 每个请求一行 JSON:请求 ID、时间、来源 IP、调用者的 Cognito 用户 ID(`sub`)、方法、路由、状态码、响应大小(不记录请求和响应内容) | 日志组 `/aws/apigateway/PiiDocumentRedactionPocApi-access` 保留 1 天(`LOG_RETENTION`),随栈一起删除 |
 
@@ -166,7 +173,7 @@ cmp agent_bundle/package_clean/main.py agent/main.py && echo OK                #
 ```bash
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2
 cdk diff -c adminEmail=admin@example.com            # 先看变更,首次部署会列出全部新建资源
-cdk deploy --require-approval never \
+cdk deploy \
   -c adminEmail=admin@example.com \
   -c appUrl=https://redaction.example.com             # 可选
 ```
@@ -221,6 +228,7 @@ aws cloudformation describe-stacks --region us-west-2 \
 - **角色变更的生效时间**:降级或删除用户时会吊销其登录会话,但已签发的访问令牌在过期前(最长 1 小时)仍然有效。升级为管理员在对方重新登录后生效。
 - **作业按用户隔离**:每个作业记录上传者(`ownerId`),别人的作业一律按"不存在"返回 404,管理员也看不到别人的文档。
 - **所有 API 都要登录**:没有令牌返回 401,普通用户访问管理接口返回 403。API 整体限流为每秒 10 次请求、突发 20 次(`API_THROTTLE_*` 常量)。
+- **自定义正则**:规则由受信任的管理员维护。自定义正则没有执行超时,写得不好的正则(例如嵌套重复)可能让处理变慢甚至超时。
 - **邮件发送量**:邀请邮件由 Cognito 默认发件人发出,每天最多 50 封。用户多时需要在用户池里配置 Amazon SES。
 
 如果管理员都无法登录(例如唯一的管理员离职),可以用新邮箱重新部署 `-c adminEmail=new-admin@example.com`,或用 AWS CLI 直接操作用户池:
@@ -245,7 +253,7 @@ TOKEN=$(aws cognito-idp initiate-auth --region us-west-2 \
   --query AuthenticationResult.AccessToken --output text)
 AUTH="Authorization: Bearer $TOKEN"
 
-# 上传(字段名 file,支持 .pdf / .docx),返回 {"jobId": ..., "status": "processing"}
+# 上传(字段名 file,支持 .pdf / .docx,最大 4 MB,内容须与扩展名一致),返回 {"jobId": ..., "status": "processing"}
 curl -s -H "$AUTH" -X POST "$BASE/jobs" -F "file=@sample.docx;filename=sample.docx"
 
 # 轮询直到 status 变为 completed(或 failed)
@@ -345,6 +353,21 @@ npm test
 
 - 单个 API 请求超时: 30 秒(`src/api/client.ts` 的 `DEFAULT_TIMEOUT_MS`)。
 - 处理超时: Job 一直处于 processing 超过 **20 分钟**,界面提示"处理超时,请点击返回重试"(`src/views/UploadView.tsx` 的 `PROCESSING_TIMEOUT_MS`)。
+
+## 清理
+
+在 `backend/` 目录删除栈:
+
+```bash
+cdk destroy -c adminEmail=admin@example.com
+```
+
+下面这些不会被 `cdk destroy` 删除,需要时自行处理:
+
+- 可能残留几个空的 Lambda 日志组,原因见 [`docs/least-privilege-deploy-policy.md`](docs/least-privilege-deploy-policy.md) 的“日志组残留”,里面没有文档内容,可手动删除。
+- `cdk bootstrap` 创建的 `CDKToolkit` 栈(独立 qualifier 时是 `CDKToolkit-PiiRedaction`)和 CDK 资产桶。同账号的其他 CDK 应用可能也在用,确认后再删除。
+- 按 `docs/` 方式创建的三个托管策略(`PiiRedactionCdkExecution`、`PiiRedactionCdkExecutionIam`、`PiiRedactionAppBoundary`)、部署身份和 bootstrap 角色,需要手动删除。
+- Bedrock 模型调用日志(如果账号开启了)里的历史记录不在本应用的管理范围内,见“数据驻留与合规提醒”。
 
 ## 常见问题
 

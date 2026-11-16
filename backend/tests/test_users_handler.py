@@ -242,6 +242,24 @@ def test_promote_demote_and_delete(pool):
     assert _call(pool, "first@example.com", "DELETE", "/users/" + u, username=u)[0] == 404
 
 
+def test_logs_identify_users_by_sub_only(pool, caplog):
+    """Invite, promote, demote and delete log the Cognito sub, never the
+    username or email. users_handler logs through the root logger, so its
+    records are selected by module."""
+    _bootstrap(pool)
+    caplog.set_level("INFO")
+    _call(pool, "first@example.com", "POST", "/users", body={"email": "u@example.com"})
+    u = _username(pool, "u@example.com")
+    _call(pool, "first@example.com", "PATCH", "/users/" + u, username=u, body={"role": "admin"})
+    _call(pool, "first@example.com", "PATCH", "/users/" + u, username=u, body={"role": "user"})
+    _call(pool, "first@example.com", "DELETE", "/users/" + u, username=u)
+    messages = [r.getMessage() for r in caplog.records if r.module == "users_handler"]
+    assert len(messages) == 4
+    for message in messages:
+        assert u in message
+        assert "@" not in message
+
+
 def test_admin_cannot_demote_or_delete_self(pool):
     _bootstrap(pool)
     me = _username(pool, "first@example.com")

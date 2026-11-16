@@ -33,7 +33,7 @@ import json
 import re
 from typing import Optional
 
-from aws_cdk import ArnFormat, CfnOutput, CfnResource, CustomResource, Duration, Fn, RemovalPolicy, Stack
+from aws_cdk import ArnFormat, CfnOutput, CfnResource, CustomResource, Duration, Fn, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_apigatewayv2 as apigwv2
 from aws_cdk import aws_apigatewayv2_authorizers as apigwv2_authorizers
 from aws_cdk import aws_apigatewayv2_integrations as apigwv2_integrations
@@ -94,6 +94,12 @@ API_ACCESS_LOG_FORMAT = {
 # is a regular user who uploads documents and works with their own jobs.
 # Must match `lambdas/request_auth.py` ADMIN_GROUP.
 ADMIN_GROUP_NAME = "admins"
+
+# Tag on the user pool. The optional least-privilege policies in docs/
+# (the deploy policy and the PiiRedactionAppBoundary permissions boundary)
+# only allow Cognito admin calls on user pools that carry it.
+USER_POOL_TAG_KEY = "PiiRedactionApp"
+USER_POOL_TAG_VALUE = "true"
 
 # Stage-wide API throttle (requests per second, burst). Applies to all
 # callers together, which is enough for a POC with a handful of users.
@@ -291,6 +297,9 @@ class RedactionStack(Stack):
                 name="operationId", type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            # Operation records can carry a rule pattern; they expire after
+            # RULE_OPERATION_RETENTION_DAYS (written by the repository).
+            time_to_live_attribute="expiresAt",
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -1006,9 +1015,12 @@ class RedactionStack(Stack):
             ),
             removal_policy=RemovalPolicy.DESTROY,
         )
+        Tags.of(self.user_pool).add(USER_POOL_TAG_KEY, USER_POOL_TAG_VALUE)
         self.user_pool_client = self.user_pool.add_client(
             "WebClient",
             generate_secret=False,
+            # The frontend signs in with USER_PASSWORD_AUTH only.
+            disable_o_auth=True,
             auth_flows=cognito.AuthFlow(user_password=True),
             prevent_user_existence_errors=True,
             access_token_validity=Duration.hours(1),

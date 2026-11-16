@@ -141,7 +141,7 @@ def mocked_aws_resources(aws_credentials):
 def test_valid_docx_upload_creates_processing_job(
     upload_handler_module, mocked_aws_resources
 ):
-    file_bytes = b"fake docx content"
+    file_bytes = b"PK\x03\x04fake docx content"
     content_type, body = _build_multipart_body("sample.docx", file_bytes)
     event = _api_gateway_event(content_type, body)
 
@@ -228,7 +228,7 @@ def test_default_detection_sources_are_llm_when_field_absent(
 ):
     """A client that does not send `addressDetectionSource`/`nameDetectionSource`
     gets the default `"llm"` persisted for both."""
-    content_type, body = _build_multipart_body("sample.docx", b"fake docx")
+    content_type, body = _build_multipart_body("sample.docx", b"PK\x03\x04fake docx")
     response = upload_handler_module.handler(
         _api_gateway_event(content_type, body), None
     )
@@ -305,3 +305,57 @@ def test_unrecognized_address_detection_source_falls_back_to_default(
     job_id = json.loads(response["body"])["jobId"]
     stored = mocked_aws_resources["jobs_table"].get_item(Key={"jobId": job_id})["Item"]
     assert stored["addressDetectionSource"] == "llm"
+
+
+def _assert_nothing_stored(mocked_aws_resources):
+    assert mocked_aws_resources["jobs_table"].scan()["Items"] == []
+    listing = mocked_aws_resources["s3"].list_objects_v2(Bucket=SOURCE_BUCKET_NAME)
+    assert listing.get("KeyCount", 0) == 0
+
+
+@pytest.mark.parametrize(
+    "file_name,file_bytes",
+    [
+        ("sample.docx", b"%PDF-1.7 a pdf renamed to docx"),
+        ("sample.pdf", b"PK\x03\x04a docx renamed to pdf"),
+        ("sample.docx", b"plain text renamed to docx"),
+        ("sample.pdf", b"plain text renamed to pdf"),
+        ("sample.docx", b""),
+        ("sample.pdf", b""),
+    ],
+)
+def test_content_not_matching_extension_is_rejected_without_creating_job(
+    upload_handler_module, mocked_aws_resources, file_name, file_bytes
+):
+    content_type, body = _build_multipart_body(file_name, file_bytes)
+    response = upload_handler_module.handler(_api_gateway_event(content_type, body), None)
+
+    assert response["statusCode"] == 400
+    assert json.loads(response["body"])["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
+    _assert_nothing_stored(mocked_aws_resources)
+
+
+def test_pdf_header_after_leading_bytes_is_accepted(
+    upload_handler_module, mocked_aws_resources
+):
+    file_bytes = b"\x00\r\n" * 100 + b"%PDF-1.4 fake content"
+    content_type, body = _build_multipart_body("sample.pdf", file_bytes)
+    response = upload_handler_module.handler(_api_gateway_event(content_type, body), None)
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"])["status"] == "processing"
+
+
+def test_file_over_the_size_limit_is_rejected_with_413(
+    upload_handler_module, mocked_aws_resources
+):
+    limit = upload_handler_module.MAX_UPLOAD_BYTES
+    file_bytes = b"%PDF-1.4 " + b"0" * limit
+    content_type, body = _build_multipart_body("sample.pdf", file_bytes)
+    response = upload_handler_module.handler(_api_gateway_event(content_type, body), None)
+
+    assert response["statusCode"] == 413
+    error = json.loads(response["body"])["error"]
+    assert error["code"] == "FILE_TOO_LARGE"
+    assert "4 MB" in error["message"]
+    _assert_nothing_stored(mocked_aws_resources)

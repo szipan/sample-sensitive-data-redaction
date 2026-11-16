@@ -112,7 +112,7 @@ def _multipart(name="a.docx"):
     boundary = "XBOUNDARY"
     body = (
         "--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{n}\"\r\n"
-        "Content-Type: application/octet-stream\r\n\r\nhello\r\n--{b}--\r\n"
+        "Content-Type: application/octet-stream\r\n\r\nPK\x03\x04hello\r\n--{b}--\r\n"
     ).format(b=boundary, n=name).encode()
     return "multipart/form-data; boundary=" + boundary, base64.b64encode(body).decode()
 

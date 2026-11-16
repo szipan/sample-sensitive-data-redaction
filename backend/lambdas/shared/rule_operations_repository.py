@@ -20,6 +20,7 @@ resolved `boto3` DynamoDB `Table` resource, with private
 item<->dataclass conversion helpers.
 """
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -31,6 +32,10 @@ from shared.models import RuleOperation
 # `infra/redaction_stack.py` for other tables (e.g. `JOBS_TABLE_NAME` for
 # `RedactionJobs`): `<TABLE_CONCEPT>_TABLE_NAME`.
 RULE_OPERATIONS_TABLE_NAME_ENV_VAR = "RULE_OPERATIONS_TABLE_NAME"
+# Operation records can carry a rule `pattern`, so they expire like the job
+# records: `create` writes `expiresAt` (epoch seconds) for the table's
+# DynamoDB TTL. It is a storage detail and not part of `RuleOperation`.
+RULE_OPERATION_RETENTION_DAYS = 1
 
 
 def _now_iso() -> str:
@@ -94,7 +99,9 @@ class RuleOperationsRepository:
 
     def create(self, operation: RuleOperation) -> None:
         """Write a new `RuleOperation` item (typically `status="queued"`)."""
-        self._table.put_item(Item=_operation_to_item(operation))
+        item = _operation_to_item(operation)
+        item["expiresAt"] = int(time.time()) + RULE_OPERATION_RETENTION_DAYS * 86400
+        self._table.put_item(Item=item)
 
     def update_status(
         self,

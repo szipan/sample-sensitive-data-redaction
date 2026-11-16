@@ -19,7 +19,7 @@ This test answers exactly that, end to end, mirroring the shipped
 1. it runs `recognize_image_text([region])` — a REAL Sonnet `Converse` call —
    against an image carrying Chinese PII, and asserts the **recall floor**: the
    returned region's `recognizedText` contains the mainland Chinese resident
-   identity number `110101199003072316` AND the Chinese name `张伟`
+   identity number `110101199003072315` AND the Chinese name `张伟`
    (the detection premise, reused verbatim from the
    recall test's floor);
 2. it then runs the **redactor** over that same region — building `image:`

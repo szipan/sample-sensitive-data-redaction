@@ -719,3 +719,89 @@ def test_job_dispatcher_reads_the_stream_from_trim_horizon(template_json):
     ]
     assert len(stream_mappings) == 1, stream_mappings
     assert stream_mappings[0]["StartingPosition"] == "TRIM_HORIZON"
+
+
+def test_rule_operations_table_has_ttl(template_json):
+    tables = [
+        r for r in template_json["Resources"].values()
+        if r["Type"] == "AWS::DynamoDB::Table"
+        and r["Properties"].get("TableName") == "RuleOperations"
+    ]
+    assert len(tables) == 1
+    assert tables[0]["Properties"]["TimeToLiveSpecification"] == {
+        "AttributeName": "expiresAt", "Enabled": True,
+    }
+
+
+def test_app_client_has_no_oauth_and_only_password_and_refresh_flows(template_json):
+    (client,) = _resources(template_json, "AWS::Cognito::UserPoolClient")
+    props = client["Properties"]
+    assert props["AllowedOAuthFlowsUserPoolClient"] is False
+    assert sorted(props["ExplicitAuthFlows"]) == [
+        "ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_PASSWORD_AUTH",
+    ]
+
+
+DOCS_DIR = BACKEND_ROOT.parent / "docs"
+
+
+def _cognito_statements(policy_file):
+    document = json.loads((DOCS_DIR / policy_file).read_text(encoding="utf-8"))
+    statements = []
+    for statement in document["Statement"]:
+        actions = statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
+        if any(a.startswith("cognito-idp:") for a in actions):
+            statements.append(statement)
+    return statements
+
+
+def test_user_pool_is_tagged_and_cognito_policy_statements_require_the_tag(template_json):
+    from infra.redaction_stack import USER_POOL_TAG_KEY, USER_POOL_TAG_VALUE
+
+    (pool,) = _resources(template_json, "AWS::Cognito::UserPool")
+    assert pool["Properties"]["UserPoolTags"][USER_POOL_TAG_KEY] == USER_POOL_TAG_VALUE
+
+    for policy_file in ("least-privilege-app-boundary-policy.json", "least-privilege-deploy-policy.json"):
+        statements = _cognito_statements(policy_file)
+        assert statements, policy_file
+        for statement in statements:
+            condition = statement["Condition"]["StringEquals"]
+            assert condition == {"aws:ResourceTag/" + USER_POOL_TAG_KEY: USER_POOL_TAG_VALUE}, policy_file
+
+
+def test_permissions_boundary_context_applies_to_every_role():
+    """With the `@aws-cdk/core:permissionsBoundary` context used by the
+    least-privilege deployment path, every IAM role in the stack (including
+    the aws-cdk-lib custom-resource roles) carries PiiRedactionAppBoundary."""
+    import aws_cdk as cdk
+    from aws_cdk.assertions import Template
+
+    from infra.redaction_stack import RedactionStack
+
+    original_cwd = os.getcwd()
+    os.chdir(BACKEND_ROOT)
+    try:
+        app = cdk.App(context={"@aws-cdk/core:permissionsBoundary": {"name": "PiiRedactionAppBoundary"}})
+        stack = RedactionStack(
+            app,
+            "TestBoundaryStack",
+            admin_email="first-admin@example.com",
+            env=cdk.Environment(account=TEST_ACCOUNT, region=TEST_REGION),
+        )
+        resources = Template.from_stack(stack).to_json()["Resources"]
+    finally:
+        os.chdir(original_cwd)
+
+    roles = {k: v for k, v in resources.items() if v["Type"] == "AWS::IAM::Role"}
+    assert roles
+    for logical_id, role in roles.items():
+        boundary = json.dumps(role["Properties"].get("PermissionsBoundary"))
+        assert ":policy/PiiRedactionAppBoundary" in boundary, logical_id
+
+
+def test_least_privilege_policies_fit_the_managed_policy_size_limit():
+    files = sorted(DOCS_DIR.glob("least-privilege-*.json"))
+    assert len(files) == 5
+    for policy_file in files:
+        document = json.loads(policy_file.read_text(encoding="utf-8"))
+        assert len(json.dumps(document, separators=(",", ":"))) <= 6144, policy_file.name

@@ -45,6 +45,20 @@ SUPPORTED_EXTENSIONS = (".docx", ".pdf")
 SUPPORTED_EXTENSIONS_MESSAGE = "支持的扩展名：.docx, .pdf"
 UPLOAD_FILE_FIELD_NAME = "file"
 
+# Largest accepted document. API Gateway base64-encodes the request body for
+# the Lambda proxy integration (about 4/3 of the size), and a synchronous
+# Lambda invocation accepts at most 6 MB, so 4 MiB leaves room for the
+# encoding and the rest of the event.
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+FILE_TOO_LARGE_MESSAGE = "文件过大，上限为 4 MB"
+
+# The content must match the extension: a .docx is a ZIP package, and a .pdf
+# carries its `%PDF-` header near the start (readers accept a few leading
+# bytes before it).
+DOCX_SIGNATURE = b"PK\x03\x04"
+PDF_SIGNATURE = b"%PDF-"
+PDF_HEADER_SEARCH_BYTES = 1024
+
 # Optional `multipart/form-data` text fields letting the caller choose which
 # detection source(s) may contribute a given entity type's spans for this Job
 # (detection-source-switch feature). Absent or unrecognized -> `"llm"` (see
@@ -236,6 +250,14 @@ def _normalize_job_mode(raw_value: Optional[str]) -> str:
     return JOB_MODE_DEFAULT
 
 
+def _content_matches_extension(extension: str, file_bytes: bytes) -> bool:
+    if extension == ".docx":
+        return file_bytes.startswith(DOCX_SIGNATURE)
+    if extension == ".pdf":
+        return PDF_SIGNATURE in file_bytes[:PDF_HEADER_SEARCH_BYTES]
+    return False
+
+
 def _extension_of(file_name: str) -> str:
     _, extension = os.path.splitext(file_name)
     return extension.lower()
@@ -284,6 +306,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     extension = _extension_of(file_name)
     if extension not in SUPPORTED_EXTENSIONS:
+        return _unsupported_file_type_response()
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        return _error_response(413, "FILE_TOO_LARGE", FILE_TOO_LARGE_MESSAGE)
+    if not _content_matches_extension(extension, file_bytes):
         return _unsupported_file_type_response()
 
     address_detection_source = _normalize_detection_source(

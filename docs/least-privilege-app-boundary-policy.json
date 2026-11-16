@@ -1,0 +1,132 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AppBuckets",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::piidocumentredactionpocst*"
+    },
+    {
+      "Sid": "ReadCdkAssets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+      ],
+      "Resource": "arn:aws:s3:::cdk-hnb659fds-assets-*"
+    },
+    {
+      "Sid": "AppTables",
+      "Effect": "Allow",
+      "Action": "dynamodb:*",
+      "Resource": [
+        "arn:aws:dynamodb:*:*:table/RedactionJobs",
+        "arn:aws:dynamodb:*:*:table/RedactionJobs/*",
+        "arn:aws:dynamodb:*:*:table/RedactionRules",
+        "arn:aws:dynamodb:*:*:table/RuleOperations"
+      ]
+    },
+    {
+      "Sid": "ListStreams",
+      "Effect": "Allow",
+      "Action": "dynamodb:ListStreams",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppQueue",
+      "Effect": "Allow",
+      "Action": "sqs:*",
+      "Resource": "arn:aws:sqs:*:*:RuleOperationsQueue.fifo"
+    },
+    {
+      "Sid": "AppFunctions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction",
+        "lambda:GetFunction"
+      ],
+      "Resource": "arn:aws:lambda:*:*:function:PiiDocumentRedactionPocSt*"
+    },
+    {
+      "Sid": "AppLogGroups",
+      "Effect": "Allow",
+      "Action": "logs:*",
+      "Resource": [
+        "arn:aws:logs:*:*:log-group:/aws/lambda/PiiDocumentRedactionPocSt*",
+        "arn:aws:logs:*:*:log-group:/aws/bedrock-agentcore/runtimes/pii_redaction_agent-*"
+      ]
+    },
+    {
+      "Sid": "DescribeLogGroups",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogGroups",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppUserPool",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:Admin*",
+        "cognito-idp:ListUsers",
+        "cognito-idp:ListUsersInGroup"
+      ],
+      "Resource": "arn:aws:cognito-idp:*:*:userpool/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PiiRedactionApp": "true"
+        }
+      }
+    },
+    {
+      "Sid": "BedrockModels",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/*",
+        "arn:aws:bedrock:*:*:inference-profile/*"
+      ]
+    },
+    {
+      "Sid": "Guardrails",
+      "Effect": "Allow",
+      "Action": "bedrock:ApplyGuardrail",
+      "Resource": "arn:aws:bedrock:*:*:guardrail/*"
+    },
+    {
+      "Sid": "AgentRuntime",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:InvokeAgentRuntime",
+        "bedrock-agentcore:GetWorkloadAccessToken*"
+      ],
+      "Resource": [
+        "arn:aws:bedrock-agentcore:*:*:runtime/pii_redaction_agent-*",
+        "arn:aws:bedrock-agentcore:*:*:workload-identity-directory/default*"
+      ]
+    },
+    {
+      "Sid": "AgentCoreMetrics",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "bedrock-agentcore"
+        }
+      }
+    },
+    {
+      "Sid": "NoResourceLevelPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "textract:DetectDocumentText",
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords",
+        "xray:GetSampling*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

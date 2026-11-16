@@ -181,64 +181,6 @@
       "Resource": "arn:aws:bedrock-agentcore:*:*:runtime/*"
     },
     {
-      "Sid": "AppRoles",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole",
-        "iam:DeleteRole",
-        "iam:GetRole",
-        "iam:UpdateRole",
-        "iam:UpdateAssumeRolePolicy",
-        "iam:PutRolePolicy",
-        "iam:DeleteRolePolicy",
-        "iam:GetRolePolicy",
-        "iam:ListRolePolicies",
-        "iam:ListAttachedRolePolicies",
-        "iam:TagRole",
-        "iam:UntagRole"
-      ],
-      "Resource": "arn:aws:iam::*:role/PiiDocumentRedactionPocSt*"
-    },
-    {
-      "Sid": "AttachOnlyLambdaBasicExecution",
-      "Effect": "Allow",
-      "Action": [
-        "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy"
-      ],
-      "Resource": "arn:aws:iam::*:role/PiiDocumentRedactionPocSt*",
-      "Condition": {
-        "ArnEquals": {
-          "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        }
-      }
-    },
-    {
-      "Sid": "PassAppRoles",
-      "Effect": "Allow",
-      "Action": "iam:PassRole",
-      "Resource": "arn:aws:iam::*:role/PiiDocumentRedactionPocSt*",
-      "Condition": {
-        "StringEquals": {
-          "iam:PassedToService": [
-            "lambda.amazonaws.com",
-            "bedrock-agentcore.amazonaws.com"
-          ]
-        }
-      }
-    },
-    {
-      "Sid": "AgentCoreServiceLinkedRole",
-      "Effect": "Allow",
-      "Action": "iam:CreateServiceLinkedRole",
-      "Resource": "arn:aws:iam::*:role/aws-service-role/*",
-      "Condition": {
-        "StringEquals": {
-          "iam:AWSServiceName": "bedrock-agentcore.amazonaws.com"
-        }
-      }
-    },
-    {
       "Sid": "BootstrapVersionParameter",
       "Effect": "Allow",
       "Action": [

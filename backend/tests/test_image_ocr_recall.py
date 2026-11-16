@@ -28,7 +28,7 @@ an equality. Concretely, after one real `Converse` call through
 1. the returned region's `recognizedText` is a populated string (the tool ran
    and wrote something);
 2. that text CONTAINS the mainland Chinese resident identity number
-   `110101199003072316`;
+   `110101199003072315`;
 3. that text CONTAINS the Chinese personal name `张伟` (CJK
    recognition).
 
@@ -114,7 +114,7 @@ FONT_PATH_ENV_VAR = "CHI_FONT_PATH"
 #: The recall floor. A mainland Chinese resident identity number and a Chinese
 #: personal name — both values Textract's `DetectDocumentText` returns as Latin
 #: garbage, so recovering them is the proof the multimodal engine reads CJK.
-RESIDENT_ID = "110101199003072316"
+RESIDENT_ID = "110101199003072315"
 CHINESE_NAME = "张伟"
 
 #: Candidate CJK-capable font files, tried in order after `CHI_FONT_PATH`.

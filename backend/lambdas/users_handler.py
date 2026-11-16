@@ -171,7 +171,7 @@ def _create_user(event: Dict[str, Any], caller: str) -> Dict[str, Any]:
             UserPoolId=_pool_id(), Username=created["Username"], GroupName=ADMIN_GROUP
         )
     admins = {created["Username"]} if role == ROLE_ADMIN else set()
-    logger.info("User %s invited with role %s", created["Username"], role)
+    logger.info("User %s invited with role %s", _attributes(created).get("sub"), role)
     return _json(201, {"user": _user_view(created, admins, caller)})
 
 
@@ -187,11 +187,11 @@ def _guard_self_and_last_admin(
     return None
 
 
-def _revoke_sessions(username: str) -> None:
+def _revoke_sessions(user: Dict[str, Any]) -> None:
     try:
-        _client().admin_user_global_sign_out(UserPoolId=_pool_id(), Username=username)
+        _client().admin_user_global_sign_out(UserPoolId=_pool_id(), Username=user["Username"])
     except ClientError:
-        logger.warning("Could not sign out user %s", username)
+        logger.warning("Could not sign out user %s", _attributes(user).get("sub"))
 
 
 def _set_role(event: Dict[str, Any], username: str, caller: str) -> Dict[str, Any]:
@@ -213,8 +213,8 @@ def _set_role(event: Dict[str, Any], username: str, caller: str) -> Dict[str, An
             UserPoolId=_pool_id(), Username=target["Username"], GroupName=ADMIN_GROUP
         )
         # Tokens carry the groups they were issued with; force a new sign-in.
-        _revoke_sessions(target["Username"])
-    logger.info("User %s role set to %s", target["Username"], role)
+        _revoke_sessions(target)
+    logger.info("User %s role set to %s", _attributes(target).get("sub"), role)
     admins = {target["Username"]} if role == ROLE_ADMIN else set()
     return _json(200, {"user": _user_view(target, admins, caller)})
 
@@ -226,9 +226,9 @@ def _delete_user(username: str, caller: str) -> Dict[str, Any]:
     blocked = _guard_self_and_last_admin(target, caller, losing_admin=True)
     if blocked:
         return blocked
-    _revoke_sessions(target["Username"])
+    _revoke_sessions(target)
     _client().admin_delete_user(UserPoolId=_pool_id(), Username=target["Username"])
-    logger.info("User %s deleted", target["Username"])
+    logger.info("User %s deleted", _attributes(target).get("sub"))
     return {"statusCode": 204, "headers": {}, "body": ""}
 
 
