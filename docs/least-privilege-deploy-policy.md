@@ -22,7 +22,7 @@ CloudTrail 显示,用现代 CDK bootstrap 部署时:
 - **资源全部由 CloudFormation 执行角色创建**(`cdk-hnb659fds-cfn-exec-role`):Lambda、S3、DynamoDB、SQS、API Gateway、Cognito、Bedrock Guardrail、AgentCore Runtime、IAM 角色。
 - 本应用没有 Docker 镜像资产,所以不需要 `image-publishing-role` 和 ECR 推送权限。
 
-五份策略都通过了 IAM Access Analyzer `validate-policy`(0 个问题),压缩后都在托管策略 6144 字符上限内(约 1.1KB、1.6KB、5.0KB、1.5KB、2.4KB)。另用 IAM 策略模拟器核对了提权路径:部署身份不能修改 CDK 角色或执行策略;执行角色不能创建不带边界的角色、不能挂 `AdministratorAccess`、不能删除边界;边界不允许任何 IAM 操作,也不允许访问本应用以外的桶、表和用户池。
+五份策略都通过了 IAM Access Analyzer `validate-policy`(0 个问题),压缩后都在托管策略 6144 字符上限内(按表格顺序分别为 1120、1561、5045、1475、2447 字符)。另用 IAM 策略模拟器核对了提权路径:部署身份不能修改 CDK 角色或执行策略;执行角色不能创建不带边界的角色、不能挂 `AdministratorAccess`、不能删除边界;边界不允许任何 IAM 操作,也不允许访问本应用以外的桶、表和用户池。
 
 ## 日常部署策略(`least-privilege-deploy-policy.json`)
 
@@ -48,6 +48,8 @@ CloudTrail 显示,用现代 CDK bootstrap 部署时:
 | `AccountWideUnscopable` | 同上 |
 
 `BootstrapRoles` 允许给 `cdk-hnb659fds-*` 角色挂策略,`BootstrapExecutionPolicy` 允许改执行策略,两者都能用来提权(例如给 deploy 角色挂 `AdministratorAccess` 再扮演它)。所以这份策略**只在运行 `cdk bootstrap` 时附加,完成后立即解除**;以后重新 bootstrap(例如升级 CDK)时再临时挂上。
+
+`BootstrapToolkitStack`、`BootstrapAssetBucket`、`BootstrapContainerRepo` 用了 `cloudformation:*`、`s3:*`、`ecr:*` 服务级通配,资源限定在 CDK bootstrap 自己的栈、桶和仓库上。这份策略只在 bootstrap 时临时附加;直接用于生产前,应按 CloudTrail 把它们收紧为 bootstrap 实际调用的动作清单(见“未验证的部分”)。
 
 ## 重要:默认 bootstrap 下的实际权限边界
 
@@ -102,7 +104,7 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 
 资源按本应用的命名收敛:
 
-- **S3**:桶 `piidocumentredactionpocst*`(栈名截断后的前缀);只读 CDK 资产桶,因为创建 Lambda 和 AgentCore Runtime 时要读代码包。
+- **S3**:桶 `piidocumentredactionpocst*`(栈名截断后的前缀);只读 CDK 资产桶,因为创建 Lambda 和 AgentCore Runtime 时要读代码包。`AppBuckets` 带条件 `aws:ResourceAccount` = `${aws:PrincipalAccount}`:S3 桶名全局唯一,这个前缀又是公开、可预测的,别的账号可以先注册符合前缀的桶;条件保证执行角色只能操作本账号的桶,防止桶名抢注。CDK 资产桶名里本身带账号 ID,所以 `ReadCdkAssets` 不需要这个条件。
 - **Lambda**:函数 `PiiDocumentRedactionPocSt*`、事件源映射。
 - **DynamoDB**:表 `RedactionJobs`(含 stream)、`RedactionRules`、`RuleOperations`。
 - **SQS**:队列 `RuleOperationsQueue.fifo`。
@@ -135,7 +137,7 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 
 | Sid | 允许 |
 | --- | --- |
-| `AppBuckets` / `ReadCdkAssets` | 本应用的两个桶 `piidocumentredactionpocst*`(`s3:*`,含 S3 自动删除函数通过桶策略获得的权限);CDK 资产桶只读 |
+| `AppBuckets` / `ReadCdkAssets` | 本应用的两个桶 `piidocumentredactionpocst*`(`s3:*`,含 S3 自动删除函数通过桶策略获得的权限,并且只限本账号的桶,条件同执行策略的 `AppBuckets`);CDK 资产桶只读 |
 | `AppTables` / `ListStreams` | 表 `RedactionJobs`(含 stream)、`RedactionRules`、`RuleOperations`;`dynamodb:ListStreams` 不支持资源级限定 |
 | `AppQueue` | 队列 `RuleOperationsQueue.fifo` |
 | `AppFunctions` | 调用和读取本应用的函数(自定义资源框架函数调用处理函数) |
@@ -146,6 +148,8 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 | `NoResourceLevelPermissions` | `textract:DetectDocumentText` 和 X-Ray 写入,不支持资源级限定 |
 
 边界不允许任何 `iam:*` 或 `sts:*`,所以应用角色不能创建或修改角色,也不能扮演其他角色。资源策略(例如桶策略)把权限授予角色 ARN 时,同样受边界限制。
+
+`s3:*`、`dynamodb:*`、`sqs:*`、`logs:*` 是边界的上限,资源已限定为本应用。边界本身不授予任何权限,角色实际能做什么由各自的策略决定;直接用于生产前,可以按需要把它们收紧为具体动作(见“未验证的部分”)。
 
 ## 实测结果(2026-11-10,us-west-2)
 
@@ -175,7 +179,7 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 
 ## 未验证的部分
 
-- **IAM Access Analyzer 策略生成**:上面的验证只覆盖本应用实际用到的动作。生产环境上线前,应使用 [策略生成](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html) 根据 CloudTrail 把 `s3:*`、`lambda:*`、`apigateway:*` 这三个服务级通配收紧为明确的动作清单。
+- **IAM Access Analyzer 策略生成**:上面的验证只覆盖本应用实际用到的动作。生产环境上线前,应使用 [策略生成](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html) 根据 CloudTrail 把三份策略里的服务级通配收紧为明确的动作清单:执行策略的 `s3:*`、`lambda:*`、`apigateway:*`;bootstrap 策略的 `cloudformation:*`、`s3:*`、`ecr:*`;边界策略的 `s3:*`、`dynamodb:*`、`sqs:*`、`logs:*`。
 - **回滚路径**:第一次部署失败时 CloudFormation 用收紧后的角色回滚过一次,删除路径已经被 destroy 覆盖;但“更新失败后回滚到旧版本”(UPDATE_ROLLBACK)没有单独测过。
 - **账号和区域**:策略里的账号和区域是 `*`。固定只部署到 `us-west-2` 的话,可以把 ARN 里的 `*:*` 换成 `us-west-2:<账号ID>`,进一步收紧。
 

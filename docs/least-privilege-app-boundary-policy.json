@@ -5,7 +5,12 @@
       "Sid": "AppBuckets",
       "Effect": "Allow",
       "Action": "s3:*",
-      "Resource": "arn:aws:s3:::piidocumentredactionpocst*"
+      "Resource": "arn:aws:s3:::piidocumentredactionpocst*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceAccount": "${aws:PrincipalAccount}"
+        }
+      }
     },
     {
       "Sid": "ReadCdkAssets",

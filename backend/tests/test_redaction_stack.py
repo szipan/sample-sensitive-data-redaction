@@ -805,3 +805,20 @@ def test_least_privilege_policies_fit_the_managed_policy_size_limit():
     for policy_file in files:
         document = json.loads(policy_file.read_text(encoding="utf-8"))
         assert len(json.dumps(document, separators=(",", ":"))) <= 6144, policy_file.name
+
+
+def test_app_bucket_statements_require_the_caller_account():
+    """The app bucket prefix is public and predictable, so any account can
+    register a matching bucket name. Statements on that prefix must only
+    apply to buckets in the caller's own account."""
+    for policy_file in ("least-privilege-cfn-exec-policy.json", "least-privilege-app-boundary-policy.json"):
+        document = json.loads((DOCS_DIR / policy_file).read_text(encoding="utf-8"))
+        statements = []
+        for statement in document["Statement"]:
+            resources = statement["Resource"] if isinstance(statement["Resource"], list) else [statement["Resource"]]
+            if "arn:aws:s3:::piidocumentredactionpocst*" in resources:
+                statements.append(statement)
+        assert statements, policy_file
+        for statement in statements:
+            condition = statement["Condition"]["StringEquals"]
+            assert condition["aws:ResourceAccount"] == "${aws:PrincipalAccount}", (policy_file, statement["Sid"])
