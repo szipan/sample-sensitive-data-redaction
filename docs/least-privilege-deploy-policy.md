@@ -96,6 +96,8 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 
 第 5 步的 `@aws-cdk/core:permissionsBoundary` 是 CDK 自带的 context,会给栈里全部 IAM 角色(包括 aws-cdk-lib 内置的自定义资源角色)加 `PermissionsBoundary`。只在这条最小权限路径里加:默认 bootstrap 的账号里没有 `PiiRedactionAppBoundary` 策略,加了会部署失败。之后部署身份只需长期附加改好的 `least-privilege-deploy-policy.json`。
 
+**已经部署过的栈**:如果栈是在加权限边界之前部署的(默认 bootstrap,或本文之前版本的执行策略),栈里的角色不带 `PiiRedactionAppBoundary`。新的执行策略只允许修改和删除带这个边界的角色,所以要先用原来的执行角色 `cdk destroy`,再换成本文的策略重新部署;否则删除会因 `iam:DeleteRole` 被拒绝而停在 `DELETE_FAILED`。
+
 ## 执行角色策略(`least-privilege-cfn-exec-policy.json` + `least-privilege-cfn-exec-iam-policy.json`)
 
 资源按本应用的命名收敛:
@@ -147,7 +149,7 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 
 ## 实测结果(2026-11-10,us-west-2)
 
-- 新建角色 `PiiRedactionDeployer`,只挂 `least-privilege-deploy-policy.json`(qualifier 换成 `piired`),用它完成了全部步骤:
+- 新建角色 `PiiRedactionDeployer`,只挂 `least-privilege-deploy-policy.json`(qualifier 换成 `piired`;当时这份策略还包含 bootstrap 权限,后来拆分,见下面 2026-11-16 的记录),用它完成了全部步骤:
   - `cdk bootstrap --qualifier piired --toolkit-stack-name CDKToolkit-PiiRedaction`,包括创建 `PiiRedactionCdkExecution` 策略;
   - 首次 `cdk deploy` 因缺少上面的 AgentCore 端点权限失败,CloudFormation 用收紧后的执行角色**完整回滚**,删除了已创建的约 100 个资源;
   - 补上权限后重新部署,CDK 先删除 `ROLLBACK_COMPLETE` 的栈再创建,119 个资源全部成功。
@@ -160,6 +162,16 @@ aws iam detach-role-policy --role-name <YOUR_DEPLOY_ROLE> \
 - **`cdk destroy`**:用最小权限身份执行,两个桶里各放了一个占位文件,桶被自动清空并删除;表、队列、Lambda、事件源映射、用户池、AgentCore Runtime、Guardrail、IAM 角色、API 都不残留。第一次 destroy 因缺少事件源映射的 Get/Delete 权限失败,补上后成功。
 - **日志组残留(已知,无害)**:删除栈时,自定义资源背后的 6 个 Lambda 会被最后调用一次,Lambda 异步投递日志,会在日志组被删之后把它重新建出来,且没有保留期。调整删除顺序没有用(事件时间线显示顺序正确,日志组仍被重建)。这 6 个函数的日志里只有桶名、日志组名和 CloudFormation 请求信息,没有文档内容或用户数据,所以不再为此增加处理逻辑:destroy 后会留下几个空的、没有保留期的 `/aws/lambda/PiiDocumentRedactionPocSt-*` 日志组,可手动删除。
 - **事件源映射加条件的尝试**(2026-11-11):给事件源映射的 Get/Update/Delete 加 `lambda:FunctionArn` 条件后,`cdk destroy` 先因删除后的确认查询 `GetEventSourceMapping` 被拒绝而失败,把 Get 改为无条件后,重试删除又因 `DeleteEventSourceMapping`(映射已不存在)被拒绝。因此恢复为无条件授权;恢复后重试删除、全新部署、`cdk destroy` 和再次全新部署都成功。
+
+### 拆分策略和权限边界(2026-11-16,同一套 `piired` 环境)
+
+- 先用旧的执行角色 `cdk destroy` 原有的栈(原因见"已经部署过的栈")。
+- 由账号管理员创建 `PiiRedactionCdkExecution`(新版本)、`PiiRedactionCdkExecutionIam`、`PiiRedactionAppBoundary`;部署身份临时挂 bootstrap 策略执行 `cdk bootstrap`,执行角色挂上两份执行策略后解除 bootstrap 策略,部署身份只留日常部署策略。
+- 全新 `cdk deploy` 一次成功。19 个 IAM 角色都带 `PiiRedactionAppBoundary`;用户池带 `PiiRedactionApp=true` 标签。
+- 功能:端到端脱敏作业完成;用户邀请、升级、降级、删除和规则的创建、删除都成功;Lambda 在边界下能正常解密环境变量。
+- 部署身份用 `admin-add-user-to-group` 恢复管理员,对本应用的用户池成功。
+- 越权尝试都被拒绝:部署身份给 `cdk-piired-deploy-role` 挂 `AdministratorAccess`(`iam:AttachRolePolicy`)、给 `PiiRedactionCdkExecution` 建新版本(`iam:CreatePolicyVersion`);通过执行角色部署一个在本应用前缀下创建无边界角色的临时栈,`iam:CreateRole` 被拒绝,栈回滚,角色没有建出来。
+- 不改代码的 `cdk deploy` 显示无变更;`cdk destroy` 成功,只留下"日志组残留"里说明的空 Lambda 日志组;再次全新部署成功。
 
 ## 未验证的部分
 
